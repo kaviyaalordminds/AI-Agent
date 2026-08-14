@@ -52,6 +52,14 @@ class Settings(BaseSettings):
     claude_model: str = "claude-sonnet-5"
     claude_max_output_tokens: int = 4096
 
+    # --- Obsidian provider ---
+    obsidian_provider: Literal["local_vault"] = "local_vault"
+    # Root directory containing one vault subdirectory per user
+    # ({obsidian_vault_root}/{user_id}/). Relative paths are resolved
+    # against the backend process's working directory. Point this at a
+    # real synced Obsidian vault location in production.
+    obsidian_vault_root: str = "../storage/obsidian_vaults"
+
     # --- Email provider ---
     email_provider: Literal["console", "smtp"] = "console"
     smtp_host: str | None = None

@@ -25,11 +25,13 @@ _MODE_PROMPTS: dict[AgentMode, str] = {
         f"{_BASE}\n\nMode: Chat. Have a normal, helpful conversation."
     ),
     AgentMode.knowledge: (
-        f"{_BASE}\n\nMode: Knowledge. In a fully built deployment you would "
-        "ground answers in the user's Obsidian vault. That integration has "
-        "not been built yet in this deployment, so if the user asks about "
-        "their notes or vault, say so plainly rather than guessing at their "
-        "contents. Otherwise answer from your general knowledge."
+        f"{_BASE}\n\nMode: Knowledge. Relevant notes from the user's "
+        "Obsidian vault (found via basic keyword search — not yet semantic "
+        "search or full gap/duplicate/outdated analysis, which ship with "
+        "the Knowledge Intelligence phase) are provided below when found. "
+        "Ground your answer in them when they're relevant, say plainly "
+        "when nothing relevant was found instead of guessing, and cite "
+        "which note(s) you drew from by title."
     ),
     AgentMode.create: (
         f"{_BASE}\n\nMode: Create. Help the user plan and describe creative "
@@ -45,13 +47,15 @@ _MODE_PROMPTS: dict[AgentMode, str] = {
         "already given to you."
     ),
     AgentMode.research: (
-        f"{_BASE}\n\nMode: Research. In a fully built deployment you would "
-        "analyze the user's existing knowledge base to identify gaps, "
-        "duplicates, and outdated information. That Knowledge Intelligence "
-        "capability has not been built yet in this deployment. For now, "
-        "help the user think through their research question using your "
-        "general knowledge, and say plainly that gap analysis isn't "
-        "available yet."
+        f"{_BASE}\n\nMode: Research. Relevant notes from the user's "
+        "Obsidian vault (basic keyword search) are provided below when "
+        "found — use them to note what the user already has written down "
+        "on this topic. Full gap/duplicate/outdated-information analysis "
+        "against the whole vault has not been built yet (Knowledge "
+        "Intelligence phase); say so if the user asks for that "
+        "specifically, but do help them reason through the research "
+        "question using both the notes provided and your general "
+        "knowledge."
     ),
     AgentMode.developer: (
         f"{_BASE}\n\nMode: Developer. Help write, explain, and review code. "
@@ -68,11 +72,16 @@ _MODE_PROMPTS: dict[AgentMode, str] = {
 }
 
 
-def build_system_prompt(mode: AgentMode, project: Project | None) -> str:
+VAULT_SEARCH_MODES = {AgentMode.knowledge, AgentMode.research}
+
+
+def build_system_prompt(mode: AgentMode, project: Project | None, vault_context: str | None = None) -> str:
     prompt = _MODE_PROMPTS[mode]
     if project is not None:
         project_context = f"\n\nCurrent project: \"{project.name}\"."
         if project.description:
             project_context += f" Description: {project.description}"
         prompt += project_context
+    if vault_context is not None:
+        prompt += f"\n\n{vault_context}"
     return prompt

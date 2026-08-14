@@ -37,7 +37,7 @@ const NAV_STRUCTURE = [
       { key: "knowledge", label: "Knowledge Center", icon: "bi-diagram-3", href: "#", enabled: false },
       { key: "knowledge-gaps", label: "Knowledge Gaps", icon: "bi-search", href: "#", enabled: false },
       { key: "knowledge-updates", label: "Knowledge Updates", icon: "bi-arrow-repeat", href: "#", enabled: false },
-      { key: "obsidian", label: "Obsidian", icon: "bi-safe2", href: "#", enabled: false },
+      { key: "obsidian", label: "Obsidian", icon: "bi-safe2", href: "obsidian.html", enabled: true },
     ],
   },
   {

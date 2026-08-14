@@ -132,6 +132,23 @@ async function loadClaudeStatusWidget() {
   }
 }
 
+async function loadObsidianStatusWidget() {
+  const statusEl = document.getElementById("dashboard-obsidian-status");
+  const detailEl = document.getElementById("dashboard-obsidian-detail");
+  try {
+    const s = await window.AIAgentApi.get("/obsidian/status");
+    if (s.connected) {
+      statusEl.innerHTML = `<span class="dot dot-success"></span><span style="font-size:0.9rem;">Connected — ${s.note_count} notes</span>`;
+      detailEl.textContent = "";
+    } else {
+      statusEl.innerHTML = `<span class="dot dot-muted"></span><span style="font-size:0.9rem;">Not connected</span>`;
+      detailEl.textContent = s.detail;
+    }
+  } catch {
+    statusEl.innerHTML = `<span class="dot dot-danger"></span><span style="font-size:0.9rem;">Could not check status</span>`;
+  }
+}
+
 async function init() {
   const user = await window.AppShell.initAppShell("dashboard");
   if (!user) return;
@@ -146,6 +163,7 @@ async function init() {
   loadDashboardProjects();
   loadDashboardActivity();
   loadClaudeStatusWidget();
+  loadObsidianStatusWidget();
 }
 
 init();

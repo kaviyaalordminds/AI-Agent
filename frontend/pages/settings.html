@@ -51,7 +51,7 @@
           <div class="surface p-3 settings-nav">
             <div class="nav-link-item active" data-settings-tab="general"><i class="bi bi-sliders"></i> General</div>
             <div class="nav-link-item" data-settings-tab="ai"><i class="bi bi-cpu"></i> AI</div>
-            <div class="nav-link-item" data-settings-tab="obsidian"><i class="bi bi-safe2"></i> Obsidian <span class="nav-link-badge">Soon</span></div>
+            <div class="nav-link-item" data-settings-tab="obsidian"><i class="bi bi-safe2"></i> Obsidian</div>
             <div class="nav-link-item" data-settings-tab="claude"><i class="bi bi-stars"></i> Claude</div>
             <div class="nav-link-item" data-settings-tab="workspace"><i class="bi bi-layout-split"></i> Workspace <span class="nav-link-badge">Soon</span></div>
             <div class="nav-link-item" data-settings-tab="security"><i class="bi bi-shield-lock"></i> Security</div>
@@ -96,12 +96,27 @@
 
           <div id="tab-obsidian" class="settings-tab d-none">
             <div class="surface p-4">
-              <div class="empty-state">
-                <div class="empty-icon"><i class="bi bi-safe2"></i></div>
-                <h6>Obsidian connection</h6>
-                <p style="font-size:0.85rem;">Vault path, MCP endpoint configuration, and connection testing ship with the Obsidian Integration phase.</p>
-                <span class="badge-pill badge-muted"><span class="dot dot-muted"></span> Not configured</span>
+              <h6 class="mb-3">Obsidian vault</h6>
+              <div id="obsidian-settings-status" class="d-flex align-items-center gap-2 mb-2">
+                <span class="dot dot-muted"></span>
+                <span style="font-size:0.9rem;">Checking…</span>
               </div>
+              <p id="obsidian-settings-detail" style="font-size:0.82rem; color:var(--text-muted);"></p>
+              <div class="d-flex gap-2 mt-3">
+                <button type="button" class="btn-ghost" id="obsidian-test-connection-btn" style="font-size:0.82rem;">
+                  <i class="bi bi-arrow-repeat"></i> Test connection
+                </button>
+                <a href="obsidian.html" class="btn-brand" style="font-size:0.82rem; padding:0.5rem 1rem;">
+                  <i class="bi bi-journal-text"></i> Open vault
+                </a>
+              </div>
+              <hr style="border-color: var(--border-subtle);" class="my-3">
+              <p style="font-size:0.78rem; color:var(--text-muted);" class="mb-0">
+                Each account gets its own local vault, auto-created on first use — no setup required. In
+                production, point <code>OBSIDIAN_VAULT_ROOT</code> at a directory containing one real,
+                synced Obsidian vault per user (e.g. via Obsidian Sync or a filesystem sync tool) instead of
+                the default local storage location.
+              </p>
             </div>
           </div>
 

@@ -78,6 +78,7 @@ async function init() {
 
   initAiTab(settings);
   initClaudeTab();
+  initObsidianTab();
 }
 
 function initAiTab(settings) {
@@ -127,6 +128,32 @@ function initClaudeTab() {
   loadClaudeStatus();
   document.getElementById("claude-test-connection-btn").addEventListener("click", async () => {
     await loadClaudeStatus();
+    window.AIAgentToast.show("Connection status refreshed.", "info");
+  });
+}
+
+async function loadObsidianStatus() {
+  const statusEl = document.getElementById("obsidian-settings-status");
+  const detailEl = document.getElementById("obsidian-settings-detail");
+  statusEl.innerHTML = `<span class="dot dot-muted"></span><span style="font-size:0.9rem;">Checking…</span>`;
+  try {
+    const s = await window.AIAgentApi.get("/obsidian/status");
+    if (s.connected) {
+      statusEl.innerHTML = `<span class="dot dot-success"></span><span style="font-size:0.9rem;">Connected — ${s.note_count} notes</span>`;
+    } else {
+      statusEl.innerHTML = `<span class="dot dot-danger"></span><span style="font-size:0.9rem;">Not connected</span>`;
+    }
+    detailEl.textContent = s.detail;
+  } catch (err) {
+    statusEl.innerHTML = `<span class="dot dot-danger"></span><span style="font-size:0.9rem;">Could not check status</span>`;
+    detailEl.textContent = err.message;
+  }
+}
+
+function initObsidianTab() {
+  loadObsidianStatus();
+  document.getElementById("obsidian-test-connection-btn").addEventListener("click", async () => {
+    await loadObsidianStatus();
     window.AIAgentToast.show("Connection status refreshed.", "info");
   });
 }

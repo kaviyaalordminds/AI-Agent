@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Obsidian · AI Agent Platform</title>
+<script>
+  (function () {
+    var theme = localStorage.getItem("aiagent:theme") || "dark";
+    document.documentElement.setAttribute("data-theme", theme);
+  })();
+</script>
+<link rel="icon" type="image/svg+xml" href="../assets/images/favicon.svg">
+<link rel="stylesheet" href="../assets/vendor/bootstrap/css/bootstrap.min.css">
+<link rel="stylesheet" href="../assets/vendor/bootstrap-icons/bootstrap-icons.min.css">
+<link rel="stylesheet" href="../assets/css/theme.css">
+<link rel="stylesheet" href="../assets/css/app.css">
+<link rel="stylesheet" href="../assets/css/obsidian.css">
+</head>
+<body>
+
+<div class="app-shell">
+  <aside class="app-sidebar" id="app-sidebar"></aside>
+
+  <div class="app-main">
+    <header class="app-topbar">
+      <div class="d-flex align-items-center gap-3">
+        <button type="button" class="sidebar-collapse-btn d-md-none" id="mobile-sidebar-toggle"><i class="bi bi-list"></i></button>
+        <button type="button" class="sidebar-collapse-btn d-md-none" id="mobile-list-toggle"><i class="bi bi-journal-text"></i></button>
+        <h5 class="mb-0">Obsidian</h5>
+        <span class="badge-pill badge-muted" id="vault-status-badge"><span class="dot dot-muted"></span> Checking…</span>
+      </div>
+      <div class="d-flex align-items-center gap-3">
+        <div class="theme-toggle" data-theme-toggle>
+          <button type="button" data-theme-value="light" title="Light theme"><i class="bi bi-sun"></i></button>
+          <button type="button" data-theme-value="dark" title="Dark theme"><i class="bi bi-moon-stars"></i></button>
+        </div>
+        <div class="user-menu-trigger" onclick="window.location.href='profile.html'">
+          <div class="avatar-circle" id="topbar-user-avatar">--</div>
+          <div class="d-none d-sm-block">
+            <div style="font-size:0.85rem; font-weight:600;" id="topbar-user-name">Loading…</div>
+            <div style="font-size:0.72rem; color:var(--text-muted);" id="topbar-user-email"></div>
+          </div>
+        </div>
+        <button type="button" class="btn-ghost" id="topbar-logout-btn" title="Log out"><i class="bi bi-box-arrow-right"></i></button>
+      </div>
+    </header>
+
+    <div class="vault-shell">
+      <aside class="vault-list-pane" id="vault-list-pane">
+        <div class="vault-list-header">
+          <button type="button" class="btn-brand w-100" id="new-note-btn"><i class="bi bi-file-earmark-plus"></i> New note</button>
+          <input class="form-control-premium" type="search" id="vault-search" placeholder="Search vault…" />
+          <select class="form-control-premium" id="vault-folder-filter">
+            <option value="">All folders</option>
+          </select>
+        </div>
+        <div class="vault-notes" id="vault-notes">
+          <div class="skeleton mb-2" style="height:70px; border-radius:10px;"></div>
+          <div class="skeleton" style="height:70px; border-radius:10px;"></div>
+        </div>
+      </aside>
+
+      <main class="vault-detail-pane">
+        <div id="detail-empty" class="empty-state" style="margin:auto;">
+          <div class="empty-icon"><i class="bi bi-journal-richtext"></i></div>
+          <h5>Select a note</h5>
+          <p style="font-size:0.85rem;">Or create a new one to start building your knowledge base.</p>
+        </div>
+
+        <div id="detail-active" class="d-none" style="display:flex; flex-direction:column; min-height:0; flex:1;">
+          <div class="vault-detail-toolbar">
+            <div class="min-width-0">
+              <div class="note-path text-truncate" id="detail-path"></div>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+              <div class="editor-tabs" id="editor-tabs">
+                <button type="button" data-view="edit" class="active">Edit</button>
+                <button type="button" data-view="preview">Preview</button>
+              </div>
+              <button type="button" class="btn-ghost" id="move-note-btn" title="Rename / Move"><i class="bi bi-arrow-left-right"></i></button>
+              <button type="button" class="btn-ghost" id="delete-note-btn" title="Delete" style="color:var(--danger); border-color:var(--danger);"><i class="bi bi-trash3"></i></button>
+              <button type="button" class="btn-brand" id="save-note-btn"><i class="bi bi-check2"></i> Save</button>
+            </div>
+          </div>
+          <div class="vault-editor-body">
+            <div class="d-flex flex-wrap gap-2" id="detail-tags"></div>
+            <textarea id="note-content" class="form-control-premium" spellcheck="false"></textarea>
+            <div class="surface markdown-preview d-none" id="note-preview"></div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+</div>
+
+<!-- New note modal -->
+<div class="modal fade" id="new-note-modal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content surface">
+      <div class="modal-body p-4">
+        <h5 class="mb-3">New note</h5>
+        <div id="new-note-alert" class="alert-inline"></div>
+        <form id="new-note-form" novalidate>
+          <div class="mb-3">
+            <label class="field-label" for="new-note-folder">Folder</label>
+            <select class="form-control-premium" id="new-note-folder"></select>
+          </div>
+          <div class="mb-3">
+            <label class="field-label" for="new-note-filename">File name</label>
+            <div class="d-flex align-items-center gap-2">
+              <input class="form-control-premium" type="text" id="new-note-filename" placeholder="My Note" required />
+              <span style="color:var(--text-muted); font-size:0.85rem;">.md</span>
+            </div>
+            <div class="field-error" data-error-for="filename"></div>
+          </div>
+          <div class="d-flex justify-content-end gap-2 mt-3">
+            <button type="button" class="btn-ghost" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit" class="btn-brand" id="new-note-submit"><i class="bi bi-plus-lg"></i> Create</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Move/rename modal -->
+<div class="modal fade" id="move-note-modal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content surface">
+      <div class="modal-body p-4">
+        <h5 class="mb-3">Rename / move note</h5>
+        <div id="move-note-alert" class="alert-inline"></div>
+        <form id="move-note-form" novalidate>
+          <label class="field-label" for="move-note-path">New path</label>
+          <input class="form-control-premium" type="text" id="move-note-path" required />
+          <div class="field-error" data-error-for="new_path"></div>
+          <div class="d-flex justify-content-end gap-2 mt-3">
+            <button type="button" class="btn-ghost" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit" class="btn-brand"><i class="bi bi-check2"></i> Move</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="../assets/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
+<script src="../assets/js/config.js"></script>
+<script src="../assets/js/api.js"></script>
+<script src="../assets/js/theme.js"></script>
+<script src="../assets/js/toast.js"></script>
+<script src="../assets/js/nav.js"></script>
+<script src="../assets/js/auth.js"></script>
+<script src="../assets/js/modals.js"></script>
+<script src="../assets/js/obsidian.js"></script>
+</body>
+</html>

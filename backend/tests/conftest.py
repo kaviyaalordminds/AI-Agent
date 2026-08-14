@@ -23,6 +23,20 @@ TestingSessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=Fals
 
 
 @pytest.fixture(autouse=True)
+def _obsidian_vault_tmp(tmp_path):
+    """Each test gets its own throwaway vault root (pytest cleans up
+    tmp_path automatically), so vault tests never touch the real
+    storage/obsidian_vaults directory or leak state between tests."""
+    from app.core.config import get_settings
+
+    settings = get_settings()
+    original = settings.obsidian_vault_root
+    settings.obsidian_vault_root = str(tmp_path / "obsidian_vaults")
+    yield
+    settings.obsidian_vault_root = original
+
+
+@pytest.fixture(autouse=True)
 def _clean_database():
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)

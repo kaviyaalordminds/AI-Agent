@@ -9,24 +9,31 @@ spec:
     UPDATE OBSIDIAN -> SAVE HISTORY -> RETURN RESULT
 
 Real today: mode-driven system prompt construction, project-context
-injection, conversation history assembly, the actual Claude call
-(streamed), message persistence, and history logging. Obsidian search,
-long-term memory, knowledge-gap detection, tool execution, and
-project/Obsidian auto-updates are seams (not stubs pretending to work) —
-they simply aren't called yet, and each mode's system prompt says so
-plainly (see prompts.py) rather than the agent claiming capabilities it
-doesn't have.
+injection, basic vault search for Knowledge/Research modes, conversation
+history assembly, the actual Claude call (streamed), message persistence,
+and history logging. Long-term memory, full knowledge-gap/duplicate/
+outdated analysis, tool execution, and project/Obsidian auto-updates are
+seams (not stubs pretending to work) — they simply aren't called yet, and
+each mode's system prompt says so plainly (see prompts.py) rather than
+the agent claiming capabilities it doesn't have.
 """
+import logging
 from collections.abc import AsyncIterator
 
 from sqlalchemy.orm import Session
 
-from app.agents.prompts import build_system_prompt
+from app.agents.prompts import VAULT_SEARCH_MODES, build_system_prompt
 from app.database.base import utcnow
 from app.integrations.claude.base import ClaudeMessage, ClaudeProvider
 from app.integrations.claude.errors import ProviderRequestError
+from app.integrations.obsidian.factory import get_obsidian_provider
 from app.models.conversation import Conversation, Message, MessageRole
 from app.models.history import HistoryEntry, HistoryEntryStatus, HistoryEntryType
+
+logger = logging.getLogger("agents.orchestrator")
+
+_MAX_VAULT_RESULTS = 4
+_MAX_NOTE_EXCERPT_CHARS = 500
 
 _TITLE_MAX_LEN = 60
 
@@ -87,7 +94,11 @@ async def run_chat_turn(
     """
     _persist_user_message(db, conversation, user_content)
 
-    system_prompt = build_system_prompt(conversation.mode, conversation.project)
+    vault_context = None
+    if conversation.mode in VAULT_SEARCH_MODES:
+        vault_context = _search_vault_context(conversation.user_id, user_content)
+
+    system_prompt = build_system_prompt(conversation.mode, conversation.project, vault_context)
     history = _load_message_history(db, conversation.id)
 
     full_text = ""
@@ -106,6 +117,28 @@ async def run_chat_turn(
         db.add(conversation)
         _log_history(db, conversation, status=HistoryEntryStatus.completed, user_content=user_content)
         db.commit()
+
+
+def _search_vault_context(user_id, query: str) -> str:
+    """Real basic-keyword vault search (see app/integrations/obsidian) used
+    to ground Knowledge/Research mode replies. Never raises — a vault
+    problem degrades to an honest 'no notes found' note in the prompt
+    rather than failing the whole chat turn."""
+    try:
+        provider = get_obsidian_provider(user_id)
+        results = provider.search(query)[:_MAX_VAULT_RESULTS]
+    except Exception:
+        logger.exception("Vault search failed for user %s", user_id)
+        return "Vault search: unavailable right now (an error occurred reading the vault)."
+
+    if not results:
+        return "Vault search: no matching notes were found in the user's Obsidian vault for this message."
+
+    blocks = ["Relevant notes from the user's Obsidian vault:"]
+    for note in results:
+        excerpt = note.excerpt[:_MAX_NOTE_EXCERPT_CHARS]
+        blocks.append(f'- "{note.title}" ({note.path}): {excerpt}')
+    return "\n".join(blocks)
 
 
 def _log_history(db: Session, conversation: Conversation, status: HistoryEntryStatus, user_content: str) -> None:
