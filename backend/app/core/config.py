@@ -26,19 +26,25 @@ class Settings(BaseSettings):
     api_prefix: str = "/api"
     # frontend_url drives the CORS allow-list (see main.py) and MUST match
     # the exact origin the browser opens the frontend from — "localhost"
-    # and "127.0.0.1" are different origins for CORS purposes even though
-    # both point at the same machine, so this intentionally stays
-    # "localhost" to match `python -m http.server` served at
-    # http://localhost:5173 (the documented dev setup). If you open the
-    # frontend at http://127.0.0.1:5173 instead, set FRONTEND_URL to match.
+    # and "127.0.0.1" are different *sites* (not just origins) for cookie
+    # purposes, even though both point at the same machine. This matters
+    # a lot here: session cookies are SameSite=Lax (see
+    # app/security/sessions.py), so if the frontend's own origin doesn't
+    # match the host used for backend API calls, the browser silently
+    # accepts the Set-Cookie on login and then refuses to attach it on
+    # the very next request — login appears to succeed but immediately
+    # bounces back to the login page. Keep this, frontend/assets/js/
+    # config.js's apiBase, and whatever host you actually open the
+    # frontend at, all using the SAME hostname (default: "localhost").
     frontend_url: str = "http://localhost:5173"
-    backend_url: str = "http://127.0.0.1:8000"
+    backend_url: str = "http://localhost:8000"
 
     # --- Database (PostgreSQL) ---
-    # Same reasoning as above: 127.0.0.1 avoids "localhost" resolution
-    # being slow on some Windows setups, which can otherwise make every
-    # DB-backed request (including login) take many seconds or appear to
-    # hang.
+    # 127.0.0.1 here is safe unlike the frontend/API host above: this is a
+    # backend-internal Python-to-Postgres socket connection, never
+    # browser-mediated, so there's no cookie/SameSite/CORS implication.
+    # It avoids "localhost" resolution being slow on some Windows setups,
+    # which can otherwise make every DB-backed request take many seconds.
     database_url: str = Field(
         default="postgresql+psycopg://ai_agent:ai_agent@127.0.0.1:5432/ai_agent_dev"
     )

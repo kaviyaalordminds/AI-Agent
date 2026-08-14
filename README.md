@@ -581,7 +581,14 @@ to override for a different backend origin).
 **Note:** the backend's CORS allowlist is `FRONTEND_URL` from `.env`
 (default `http://localhost:5173`) — the origin you open the frontend
 from must match exactly (`localhost`, not `127.0.0.1`, unless you change
-both).
+both). This matters beyond CORS, too: session cookies are
+`SameSite=Lax`, and `localhost`/`127.0.0.1` are different *sites* for
+cookie purposes even on the same machine. If the frontend's origin and
+`apiBase` (`frontend/assets/js/config.js`) don't use the same hostname,
+login silently "succeeds" (the `Set-Cookie` is accepted) but the very
+next request comes back 401 and bounces you straight back to the login
+page — no CORS error, no obvious clue. Keep `FRONTEND_URL`, `apiBase`,
+and the URL you actually open, all on the same hostname.
 
 ### Tests
 

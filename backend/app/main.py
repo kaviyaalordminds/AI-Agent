@@ -38,6 +38,13 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    # Without max_age, browsers re-run the OPTIONS preflight on every
+    # single unsafe request (POST/PATCH/DELETE) rather than caching it —
+    # doubling the round trips for every state-changing call, including
+    # login. Caching it for 10 minutes is a safe, standard optimization
+    # with no security implication (it only caches which methods/headers
+    # are allowed, not any actual response data).
+    max_age=600,
 )
 
 
