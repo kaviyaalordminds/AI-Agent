@@ -29,7 +29,7 @@ const NAV_STRUCTURE = [
   },
   {
     label: "Projects",
-    items: [{ key: "projects", label: "Projects", icon: "bi-kanban", href: "#", enabled: false }],
+    items: [{ key: "projects", label: "Projects", icon: "bi-kanban", href: "projects.html", enabled: true }],
   },
   {
     label: "Knowledge",
@@ -42,7 +42,7 @@ const NAV_STRUCTURE = [
   },
   {
     label: "History",
-    items: [{ key: "history", label: "History", icon: "bi-clock-history", href: "#", enabled: false }],
+    items: [{ key: "history", label: "History", icon: "bi-clock-history", href: "history.html", enabled: true }],
   },
   {
     label: "Deployments",

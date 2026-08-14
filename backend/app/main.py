@@ -7,6 +7,8 @@ from fastapi.responses import JSONResponse
 
 import app.models  # noqa: F401  (registers all ORM models before first use)
 from app.api.auth.router import router as auth_router
+from app.api.history.router import router as history_router
+from app.api.projects.router import router as projects_router
 from app.api.users.router import router as users_router
 from app.core.config import get_settings
 from app.core.logging import configure_logging
@@ -55,6 +57,8 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
 
 app.include_router(auth_router, prefix=settings.api_prefix)
 app.include_router(users_router, prefix=settings.api_prefix)
+app.include_router(projects_router, prefix=settings.api_prefix)
+app.include_router(history_router, prefix=settings.api_prefix)
 
 
 @app.get(f"{settings.api_prefix}/health")

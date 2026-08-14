@@ -5,7 +5,7 @@ platform. This repository is being built in phases (see **Roadmap**
 below); this README always reflects what's actually implemented, not the
 full end-state vision.
 
-## What's implemented (Phase 1 + 2: Foundation & Authentication)
+## What's implemented (Phase 1–3: Foundation, Authentication & Core UI)
 
 - **Backend**: FastAPI (Python), modular `app/` package (`api`, `models`,
   `schemas`, `security`, `services`, `database`, `core`).
@@ -23,6 +23,18 @@ full end-state vision.
   framework. Light/dark theme with persistence, responsive layout
   (desktop/tablet/mobile), collapsible sidebar, toasts, skeleton/empty/
   error states.
+- **Projects**: create/rename/archive/unarchive/duplicate/delete, ownership-isolated
+  per user, active/archived filtering, a per-project workspace with
+  Overview/Chat/Knowledge/Files/Tasks/History/Settings tabs.
+- **History**: a real, filterable, paginated activity log (type, status,
+  project, search, date range) with rename/move-to-project/delete. It is
+  legitimately empty until later phases start writing entries — nothing is
+  seeded or faked.
+- **Reusable workspace layout**: a full-screen toggle and a draggable,
+  preset-snappable (40/60, 50/50, 60/40), per-instance-persisted
+  split-screen component (`workspace-layout.js`/`.css`), demonstrated in
+  the project workspace's Chat tab and ready for the AI Agent/Obsidian
+  and Editor/Preview panes later phases will add.
 - **No credit/usage-limit system** — by design, per the product spec.
 - **Provider-abstraction pattern established**: `EmailProvider` (console
   for dev, SMTP for prod) is the first instance of the
@@ -37,13 +49,16 @@ mockup or placeholder.
 ### What you'll see marked "planned for a later phase"
 
 The sidebar, dashboard quick-create tiles, and Settings tabs for AI
-Chat, Image/Video/Audio/Document/Website/Design studios, Projects,
-Knowledge Center, Obsidian, History, and Deployments are visibly present
-(matching the target navigation structure) but intentionally disabled —
-clicking them shows an honest "planned for a later development phase"
-message instead of a fake result. This is deliberate: the product spec
-explicitly forbids fake success states, so until a module has a real
-backend behind it, its UI says so rather than pretending.
+Chat, Image/Video/Audio/Document/Website/Design studios, Knowledge
+Center, Obsidian, and Deployments are visibly present (matching the
+target navigation structure) but intentionally disabled — clicking them
+shows an honest "planned for a later development phase" message instead
+of a fake result. Within the project workspace, the Chat pane's layout
+is real (see above) but the AI conversation itself, and the Knowledge/
+Files/Tasks tab contents, are the same kind of honest placeholder. This
+is deliberate: the product spec explicitly forbids fake success states,
+so until a module has a real backend behind it, its UI says so rather
+than pretending.
 
 ## Architecture
 
@@ -54,7 +69,7 @@ backend/
     core/               settings (env-driven), logging
     database/            SQLAlchemy engine/session, declarative base
     models/              User, UserSession, UserSettings, EmailVerificationToken,
-                          PasswordResetToken
+                          PasswordResetToken, Project, HistoryEntry
     schemas/              Pydantic request/response models + validation
     security/             Argon2id hashing, token generation/hashing,
                           session + CSRF dependencies, rate limiting
@@ -62,16 +77,22 @@ backend/
     api/
       auth/               /api/auth/* routes
       users/              /api/users/* routes
+      projects/            /api/projects/* routes
+      history/              /api/history/* routes
   alembic/                DB migrations
-  tests/                  pytest suite (30 tests, real Postgres, no mocks)
+  tests/                  pytest suite (55 tests, real Postgres, no mocks)
 
 frontend/
   index.html              session-aware redirect (dashboard vs login)
   pages/                  login, signup, forgot/reset password, verify-email,
-                          dashboard, profile, settings
+                          dashboard, profile, settings, projects,
+                          project-workspace, history
   assets/
-    css/                  design tokens (theme.css), auth layout, app shell
-    js/                   api client, theme, toast, nav/shell, page controllers
+    css/                  design tokens (theme.css), auth layout, app shell,
+                          workspace-layout.css (full-screen/split-screen)
+    js/                   api client, theme, toast, nav/shell, generic confirm
+                          modal, reusable split-screen/full-screen controller,
+                          shared history-row renderer, page controllers
     vendor/                vendored Bootstrap 5 + Bootstrap Icons (no CDN
                           dependency — see below)
   components/             (reserved for shared HTML fragments as the app grows)
@@ -155,13 +176,16 @@ cd backend
 .venv/bin/pytest tests/ -v
 ```
 
-30 tests covering signup, duplicate-email/weak-password/mismatch
+55 tests covering signup, duplicate-email/weak-password/mismatch
 rejection, email verification (incl. single-use/expiry), login (incl.
 unverified-account block, wrong password, account lockout), logout,
 logout-all, per-session revocation, forgot/reset password (incl.
 single-use tokens and session revocation on reset), profile updates,
-email change, password change, and settings persistence — all against a
-real PostgreSQL test database, no mocked ORM.
+email change, password change, settings persistence, project CRUD
+(create/rename/archive/unarchive/duplicate/delete), cross-user project
+ownership isolation, and history listing/filtering/pagination/rename/
+move/delete — all against a real PostgreSQL test database, no mocked
+ORM.
 
 ## Roadmap
 
@@ -169,7 +193,7 @@ This repo follows the phased plan from the product spec:
 
 1. ✅ **Foundation** — repo structure, backend/frontend skeleton, Postgres, env config
 2. ✅ **Authentication** — signup/login/verify/reset/sessions/profile
-3. ⬜ **Core UI** — full workspace shell (full-screen/split-screen panels), history, projects UI
+3. ✅ **Core UI** — reusable full-screen/split-screen workspace shell, history, projects UI
 4. ⬜ **AI Agent** — Claude provider, orchestrator, chat, streaming, tool architecture
 5. ⬜ **Obsidian** — MCP integration, vault search/read/create/update, connection management
 6. ⬜ **Knowledge Intelligence** — gap/duplicate/outdated detection, knowledge graph, auto-update policies

@@ -173,7 +173,8 @@ a:hover { color: var(--brand-500); }
   cursor: pointer;
   transition: all var(--transition-fast);
 }
-.btn-ghost:hover { background: var(--bg-surface-alt); color: var(--text-primary); }
+.btn-ghost:hover:not(:disabled) { background: var(--bg-surface-alt); color: var(--text-primary); }
+.btn-ghost:disabled { opacity: 0.45; cursor: not-allowed; }
 
 .form-control-premium {
   width: 100%;

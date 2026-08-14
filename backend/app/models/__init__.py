@@ -3,6 +3,8 @@ registry before relationships (declared as string forward-refs) are
 resolved. Import `app.models` once at startup (main.py does this) before
 using the ORM.
 """
+from app.models.history import HistoryEntry, HistoryEntryStatus, HistoryEntryType  # noqa: F401
+from app.models.project import Project, ProjectStatus  # noqa: F401
 from app.models.session import UserSession  # noqa: F401
 from app.models.token import EmailVerificationToken, PasswordResetToken  # noqa: F401
 from app.models.user import User  # noqa: F401
@@ -14,4 +16,9 @@ __all__ = [
     "UserSettings",
     "EmailVerificationToken",
     "PasswordResetToken",
+    "Project",
+    "ProjectStatus",
+    "HistoryEntry",
+    "HistoryEntryType",
+    "HistoryEntryStatus",
 ]

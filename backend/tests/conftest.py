@@ -48,6 +48,41 @@ def client():
 
 
 @pytest.fixture
+def db_session():
+    session = TestingSessionLocal()
+    try:
+        yield session
+    finally:
+        session.close()
+
+
+@pytest.fixture
+def auth_client(client, email_outbox):
+    """A TestClient already signed up, verified, and logged in as a fresh
+    user. Returns (client, csrf_token) — pass csrf_token as the
+    X-CSRF-Token header on any state-changing request."""
+    import re
+
+    email = "owner@example.com"
+    password = "Str0ng!Passw0rd"
+    client.post(
+        "/api/auth/signup",
+        json={
+            "full_name": "Project Owner",
+            "email": email,
+            "password": password,
+            "confirm_password": password,
+            "accept_terms": True,
+        },
+    )
+    token = re.search(r"token=([A-Za-z0-9_\-]+)", email_outbox[-1].text_body).group(1)
+    client.post("/api/auth/verify-email", json={"token": token})
+    login_resp = client.post("/api/auth/login", json={"email": email, "password": password})
+    csrf = login_resp.cookies["aiagent_csrf"]
+    return client, csrf
+
+
+@pytest.fixture
 def email_outbox(monkeypatch):
     """Captures every EmailMessage the app attempts to send, instead of
     hitting the real console/SMTP provider, so tests can pull verification

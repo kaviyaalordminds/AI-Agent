@@ -61,21 +61,38 @@
           <div class="surface p-4 mb-4">
             <div class="d-flex justify-content-between align-items-center mb-3">
               <h6 class="mb-0">Active Projects</h6>
+              <div class="d-flex gap-2">
+                <a href="projects.html" class="btn-ghost" style="font-size:0.78rem; padding:0.35rem 0.7rem;">View all</a>
+                <button type="button" class="btn-brand" id="dashboard-new-project-btn" style="font-size:0.78rem; padding:0.35rem 0.7rem;"><i class="bi bi-plus-lg"></i> New</button>
+              </div>
             </div>
-            <div class="empty-state" id="projects-empty">
+            <div id="dashboard-projects-skeleton" class="d-none">
+              <div class="skeleton mb-2" style="height:52px; border-radius:10px;"></div>
+              <div class="skeleton" style="height:52px; border-radius:10px;"></div>
+            </div>
+            <div class="empty-state d-none" id="projects-empty">
               <div class="empty-icon"><i class="bi bi-kanban"></i></div>
               <p class="mb-0">No projects yet.</p>
-              <p style="font-size:0.82rem;">The Projects system arrives in a later development phase.</p>
+              <p style="font-size:0.82rem;">Create your first project to start organizing your work.</p>
             </div>
+            <div id="dashboard-projects-list"></div>
           </div>
 
           <div class="surface p-4">
-            <h6 class="mb-3">Recent Activity</h6>
-            <div class="empty-state" id="activity-empty">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <h6 class="mb-0">Recent Activity</h6>
+              <a href="history.html" class="btn-ghost" style="font-size:0.78rem; padding:0.35rem 0.7rem;">View all</a>
+            </div>
+            <div id="dashboard-activity-skeleton" class="d-none">
+              <div class="skeleton mb-2" style="height:40px; border-radius:10px;"></div>
+              <div class="skeleton" style="height:40px; border-radius:10px;"></div>
+            </div>
+            <div class="empty-state d-none" id="activity-empty">
               <div class="empty-icon"><i class="bi bi-activity"></i></div>
               <p class="mb-0">No activity yet.</p>
               <p style="font-size:0.82rem;">Actions you and the AI agent take will appear here once the agent and history modules are built.</p>
             </div>
+            <div id="dashboard-activity-list"></div>
           </div>
         </div>
 
@@ -110,45 +127,6 @@
 <script src="../assets/js/theme.js"></script>
 <script src="../assets/js/toast.js"></script>
 <script src="../assets/js/nav.js"></script>
-<script>
-  const QUICK_CREATE = [
-    { icon: "bi-image", label: "Image" },
-    { icon: "bi-camera-reels", label: "Video" },
-    { icon: "bi-mic", label: "Audio" },
-    { icon: "bi-easel", label: "PPT" },
-    { icon: "bi-file-earmark-text", label: "Word" },
-    { icon: "bi-file-earmark-spreadsheet", label: "Excel" },
-    { icon: "bi-globe", label: "Website" },
-    { icon: "bi-badge-3d", label: "3D Web" },
-    { icon: "bi-file-earmark-image", label: "Poster" },
-    { icon: "bi-vector-pen", label: "Logo" },
-  ];
-  document.getElementById("quick-create-grid").innerHTML = QUICK_CREATE.map(
-    (tile) => `
-    <div class="surface quick-create-tile" data-quick-create="${tile.label}">
-      <i class="bi ${tile.icon}"></i>
-      <span>${tile.label}</span>
-      <span class="nav-link-badge">Soon</span>
-    </div>`
-  ).join("");
-  document.querySelectorAll("[data-quick-create]").forEach((el) => {
-    el.addEventListener("click", () => {
-      window.AIAgentToast.show(`${el.dataset.quickCreate} generation is planned for a later development phase.`, "info");
-    });
-  });
-
-  document.getElementById("command-submit").addEventListener("click", submitCommand);
-  document.getElementById("command-input").addEventListener("keydown", (e) => {
-    if (e.key === "Enter") submitCommand();
-  });
-  function submitCommand() {
-    const input = document.getElementById("command-input");
-    if (!input.value.trim()) return;
-    window.AIAgentToast.show("The AI Agent chat engine is planned for a later development phase.", "info");
-    input.value = "";
-  }
-
-  window.AppShell.initAppShell("dashboard");
-</script>
+<script src="../assets/js/dashboard.js"></script>
 </body>
 </html>

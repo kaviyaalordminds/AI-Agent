@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>History · AI Agent Platform</title>
+<script>
+  (function () {
+    var theme = localStorage.getItem("aiagent:theme") || "dark";
+    document.documentElement.setAttribute("data-theme", theme);
+  })();
+</script>
+<link rel="icon" type="image/svg+xml" href="../assets/images/favicon.svg">
+<link rel="stylesheet" href="../assets/vendor/bootstrap/css/bootstrap.min.css">
+<link rel="stylesheet" href="../assets/vendor/bootstrap-icons/bootstrap-icons.min.css">
+<link rel="stylesheet" href="../assets/css/theme.css">
+<link rel="stylesheet" href="../assets/css/app.css">
+</head>
+<body>
+
+<div class="app-shell">
+  <aside class="app-sidebar" id="app-sidebar"></aside>
+
+  <div class="app-main">
+    <header class="app-topbar">
+      <div class="d-flex align-items-center gap-3">
+        <button type="button" class="sidebar-collapse-btn d-md-none" id="mobile-sidebar-toggle"><i class="bi bi-list"></i></button>
+        <h5 class="mb-0">History</h5>
+      </div>
+      <div class="d-flex align-items-center gap-3">
+        <div class="theme-toggle" data-theme-toggle>
+          <button type="button" data-theme-value="light" title="Light theme"><i class="bi bi-sun"></i></button>
+          <button type="button" data-theme-value="dark" title="Dark theme"><i class="bi bi-moon-stars"></i></button>
+        </div>
+        <div class="user-menu-trigger" onclick="window.location.href='profile.html'">
+          <div class="avatar-circle" id="topbar-user-avatar">--</div>
+          <div class="d-none d-sm-block">
+            <div style="font-size:0.85rem; font-weight:600;" id="topbar-user-name">Loading…</div>
+            <div style="font-size:0.72rem; color:var(--text-muted);" id="topbar-user-email"></div>
+          </div>
+        </div>
+        <button type="button" class="btn-ghost" id="topbar-logout-btn" title="Log out"><i class="bi bi-box-arrow-right"></i></button>
+      </div>
+    </header>
+
+    <main class="app-content">
+      <div class="surface p-3 mb-4">
+        <div class="filter-bar">
+          <input class="form-control-premium" type="search" id="history-search" placeholder="Search history…" style="max-width:240px;" />
+          <select class="form-control-premium" id="history-type-filter" style="max-width:180px;">
+            <option value="">All types</option>
+            <option value="chat">Chat</option>
+            <option value="image">Image</option>
+            <option value="video">Video</option>
+            <option value="audio">Audio</option>
+            <option value="document">Document</option>
+            <option value="website">Website</option>
+            <option value="poster">Poster</option>
+            <option value="logo">Logo</option>
+            <option value="deployment">Deployment</option>
+            <option value="knowledge_update">Knowledge Update</option>
+          </select>
+          <select class="form-control-premium" id="history-status-filter" style="max-width:160px;">
+            <option value="">All statuses</option>
+            <option value="queued">Queued</option>
+            <option value="processing">Processing</option>
+            <option value="completed">Completed</option>
+            <option value="failed">Failed</option>
+          </select>
+          <select class="form-control-premium" id="history-project-filter" style="max-width:200px;">
+            <option value="">All projects</option>
+          </select>
+          <button type="button" class="btn-ghost" id="history-clear-filters">Clear</button>
+        </div>
+      </div>
+
+      <div class="surface p-0">
+        <div id="history-empty" class="empty-state d-none">
+          <div class="empty-icon"><i class="bi bi-clock-history"></i></div>
+          <h5 id="history-empty-title">No history yet</h5>
+          <p id="history-empty-subtitle">Actions you and the AI agent take across every tool will appear here once those modules are built.</p>
+        </div>
+        <div id="history-list"></div>
+      </div>
+
+      <div class="d-flex justify-content-between align-items-center mt-3" id="history-pagination">
+        <span style="font-size:0.82rem; color:var(--text-muted);" id="history-pagination-summary"></span>
+        <div class="d-flex gap-2">
+          <button type="button" class="btn-ghost" id="history-prev-page" style="padding:0.4rem 0.8rem; font-size:0.82rem;">Previous</button>
+          <button type="button" class="btn-ghost" id="history-next-page" style="padding:0.4rem 0.8rem; font-size:0.82rem;">Next</button>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script src="../assets/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
+<script src="../assets/js/config.js"></script>
+<script src="../assets/js/api.js"></script>
+<script src="../assets/js/theme.js"></script>
+<script src="../assets/js/toast.js"></script>
+<script src="../assets/js/nav.js"></script>
+<script src="../assets/js/modals.js"></script>
+<script src="../assets/js/history-common.js"></script>
+<script src="../assets/js/history.js"></script>
+</body>
+</html>

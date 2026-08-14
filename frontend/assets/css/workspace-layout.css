@@ -1,0 +1,123 @@
+/* Reusable full-screen / split-screen workspace layout, used by any tool
+   that needs a two-pane view (AI Agent | Obsidian, Editor | Preview,
+   Prompt | Result, etc.). Panel sizing is driven by the --split-ratio
+   custom property (percentage of the left/top pane), set inline by
+   workspace-layout.js and persisted per instance via localStorage. */
+
+.workspace-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.6rem 1rem;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+}
+
+.workspace-toolbar .layout-presets {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  background: var(--bg-surface-alt);
+  border-radius: var(--radius-pill);
+  padding: 0.25rem;
+}
+.workspace-toolbar .layout-presets button {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.76rem;
+  font-weight: 600;
+  padding: 0.35rem 0.65rem;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.workspace-toolbar .layout-presets button.active {
+  background: linear-gradient(135deg, var(--brand-500), var(--brand-600));
+  color: #fff;
+}
+.workspace-toolbar .layout-presets button:hover:not(.active) { color: var(--text-primary); }
+
+.workspace-fullscreen-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  color: var(--text-secondary);
+  border-radius: var(--radius-md);
+  padding: 0.4rem 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.workspace-fullscreen-btn:hover { background: var(--bg-surface-alt); color: var(--text-primary); }
+
+.split-view {
+  --split-ratio: 50;
+  display: grid;
+  grid-template-columns: calc(var(--split-ratio) * 1% - 4px) 8px 1fr;
+  height: 100%;
+  min-height: 0;
+}
+.split-view.split-stacked {
+  grid-template-columns: 1fr;
+  grid-template-rows: calc(var(--split-ratio) * 1% - 4px) 8px 1fr;
+}
+
+.split-pane {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  background: var(--bg-canvas);
+}
+.split-pane-a { border-right: 1px solid var(--border-subtle); }
+.split-view.split-stacked .split-pane-a { border-right: none; border-bottom: 1px solid var(--border-subtle); }
+
+.split-divider {
+  position: relative;
+  cursor: col-resize;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.split-view.split-stacked .split-divider { cursor: row-resize; }
+.split-divider::after {
+  content: "";
+  width: 3px;
+  height: 32px;
+  border-radius: var(--radius-pill);
+  background: var(--border-strong);
+  transition: background var(--transition-fast);
+}
+.split-view.split-stacked .split-divider::after { width: 32px; height: 3px; }
+.split-divider:hover::after,
+.split-divider.dragging::after { background: var(--brand-500); }
+
+.workspace-root {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 65px);
+}
+
+/* Full-screen mode: the workspace overlays the entire viewport, hiding
+   the app sidebar/topbar chrome so the tool gets the full screen. The
+   grid itself must be collapsed to one column — display:none on the
+   sidebar removes it from grid flow but leaves its track reserved
+   otherwise, so the "full screen" would still lose that width. */
+.app-shell.workspace-fullscreen-active {
+  grid-template-columns: 1fr;
+}
+.workspace-fullscreen-active .app-sidebar,
+.workspace-fullscreen-active .app-topbar {
+  display: none;
+}
+.workspace-fullscreen-active .workspace-root {
+  height: 100vh;
+}
+.workspace-fullscreen-active .app-content {
+  padding: 0;
+}

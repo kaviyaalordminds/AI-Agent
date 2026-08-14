@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Project · AI Agent Platform</title>
+<script>
+  (function () {
+    var theme = localStorage.getItem("aiagent:theme") || "dark";
+    document.documentElement.setAttribute("data-theme", theme);
+  })();
+</script>
+<link rel="icon" type="image/svg+xml" href="../assets/images/favicon.svg">
+<link rel="stylesheet" href="../assets/vendor/bootstrap/css/bootstrap.min.css">
+<link rel="stylesheet" href="../assets/vendor/bootstrap-icons/bootstrap-icons.min.css">
+<link rel="stylesheet" href="../assets/css/theme.css">
+<link rel="stylesheet" href="../assets/css/app.css">
+<link rel="stylesheet" href="../assets/css/workspace-layout.css">
+</head>
+<body>
+
+<div class="app-shell">
+  <aside class="app-sidebar" id="app-sidebar"></aside>
+
+  <div class="app-main">
+    <header class="app-topbar">
+      <div class="d-flex align-items-center gap-3 min-width-0">
+        <button type="button" class="sidebar-collapse-btn d-md-none" id="mobile-sidebar-toggle"><i class="bi bi-list"></i></button>
+        <a href="projects.html" class="btn-ghost" style="padding:0.4rem 0.6rem;" title="Back to Projects"><i class="bi bi-arrow-left"></i></a>
+        <h5 class="mb-0 text-truncate" id="project-title-header">Loading…</h5>
+      </div>
+      <div class="d-flex align-items-center gap-3">
+        <div class="theme-toggle" data-theme-toggle>
+          <button type="button" data-theme-value="light" title="Light theme"><i class="bi bi-sun"></i></button>
+          <button type="button" data-theme-value="dark" title="Dark theme"><i class="bi bi-moon-stars"></i></button>
+        </div>
+        <div class="user-menu-trigger" onclick="window.location.href='profile.html'">
+          <div class="avatar-circle" id="topbar-user-avatar">--</div>
+          <div class="d-none d-sm-block">
+            <div style="font-size:0.85rem; font-weight:600;" id="topbar-user-name">Loading…</div>
+            <div style="font-size:0.72rem; color:var(--text-muted);" id="topbar-user-email"></div>
+          </div>
+        </div>
+        <button type="button" class="btn-ghost" id="topbar-logout-btn" title="Log out"><i class="bi bi-box-arrow-right"></i></button>
+      </div>
+    </header>
+
+    <div class="workspace-root">
+      <div class="tab-strip">
+        <button type="button" class="active" data-tab="overview">Overview</button>
+        <button type="button" data-tab="chat">Chat</button>
+        <button type="button" data-tab="knowledge">Knowledge</button>
+        <button type="button" data-tab="files">Files</button>
+        <button type="button" data-tab="tasks">Tasks</button>
+        <button type="button" data-tab="history">History</button>
+        <button type="button" data-tab="settings">Settings</button>
+      </div>
+
+      <div style="flex:1; min-height:0; overflow:auto;">
+        <!-- Overview -->
+        <div class="project-tab-panel app-content" data-panel="overview">
+          <div id="overview-skeleton" class="surface skeleton" style="height:200px;"></div>
+          <div id="overview-content" class="d-none" style="max-width:640px;">
+            <div class="surface p-4 mb-4">
+              <h6 class="mb-3">Overview</h6>
+              <div id="overview-alert" class="alert-inline"></div>
+              <form id="overview-form" novalidate>
+                <div class="mb-3">
+                  <label class="field-label" for="overview-name">Name</label>
+                  <input class="form-control-premium" type="text" id="overview-name" name="name" required maxlength="255" />
+                  <div class="field-error" data-error-for="name"></div>
+                </div>
+                <div class="mb-3">
+                  <label class="field-label" for="overview-description">Description</label>
+                  <textarea class="form-control-premium" id="overview-description" name="description" rows="4"></textarea>
+                </div>
+                <button type="submit" class="btn-brand" id="overview-save-btn"><i class="bi bi-check2"></i> Save changes</button>
+              </form>
+            </div>
+            <div class="surface p-4">
+              <h6 class="mb-3">Details</h6>
+              <div class="d-flex justify-content-between mb-2" style="font-size:0.86rem;">
+                <span style="color:var(--text-muted);">Status</span>
+                <span id="overview-status" class="badge-pill badge-success">Active</span>
+              </div>
+              <div class="d-flex justify-content-between mb-2" style="font-size:0.86rem;">
+                <span style="color:var(--text-muted);">Created</span>
+                <span id="overview-created"></span>
+              </div>
+              <div class="d-flex justify-content-between" style="font-size:0.86rem;">
+                <span style="color:var(--text-muted);">Last updated</span>
+                <span id="overview-updated"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Chat (demonstrates the reusable split-screen workspace layout) -->
+        <div class="project-tab-panel d-none" data-panel="chat" style="height:100%; display:flex; flex-direction:column;">
+          <div class="workspace-toolbar">
+            <div class="layout-presets" id="chat-layout-presets"></div>
+            <button type="button" class="workspace-fullscreen-btn" id="chat-fullscreen-btn">
+              <i class="bi bi-arrows-fullscreen"></i> Full screen
+            </button>
+          </div>
+          <div class="split-view" id="chat-split-view" style="flex:1;">
+            <div class="split-pane split-pane-a">
+              <div class="empty-state">
+                <div class="empty-icon"><i class="bi bi-chat-dots"></i></div>
+                <h6>AI Agent Chat</h6>
+                <p style="font-size:0.85rem;">Project-aware conversation ships with the AI Agent phase. This pane, the divider, the layout presets, and full-screen mode are all fully functional now — only the chat itself is pending.</p>
+              </div>
+            </div>
+            <div class="split-divider"></div>
+            <div class="split-pane split-pane-b">
+              <div class="empty-state">
+                <div class="empty-icon"><i class="bi bi-safe2"></i></div>
+                <h6>Obsidian Context</h6>
+                <p style="font-size:0.85rem;">Relevant vault notes for this project will appear here once the Obsidian integration phase lands.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Knowledge -->
+        <div class="project-tab-panel app-content d-none" data-panel="knowledge">
+          <div class="surface p-4">
+            <div class="empty-state">
+              <div class="empty-icon"><i class="bi bi-diagram-3"></i></div>
+              <h6>Project knowledge</h6>
+              <p style="font-size:0.85rem;">Knowledge gap/duplicate/outdated detection scoped to this project ships with the Knowledge Intelligence phase.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Files -->
+        <div class="project-tab-panel app-content d-none" data-panel="files">
+          <div class="surface p-4">
+            <div class="empty-state">
+              <div class="empty-icon"><i class="bi bi-folder2-open"></i></div>
+              <h6>Project files</h6>
+              <p style="font-size:0.85rem;">File upload/management ships alongside the Creative Studio and Storage phases.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tasks -->
+        <div class="project-tab-panel app-content d-none" data-panel="tasks">
+          <div class="surface p-4">
+            <div class="empty-state">
+              <div class="empty-icon"><i class="bi bi-list-check"></i></div>
+              <h6>Project tasks</h6>
+              <p style="font-size:0.85rem;">Task planning and automation ship with the AI Agent phase.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- History -->
+        <div class="project-tab-panel app-content d-none" data-panel="history">
+          <div class="surface p-0">
+            <div id="project-history-empty" class="empty-state d-none">
+              <div class="empty-icon"><i class="bi bi-clock-history"></i></div>
+              <h6>No history yet</h6>
+              <p style="font-size:0.85rem;">Actions taken in this project will appear here once the generation modules are built.</p>
+            </div>
+            <div id="project-history-list"></div>
+          </div>
+        </div>
+
+        <!-- Settings -->
+        <div class="project-tab-panel app-content d-none" data-panel="settings">
+          <div class="surface p-4 mb-4" style="max-width:640px;">
+            <h6 class="mb-3">Danger zone</h6>
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <div>
+                <div style="font-weight:600; font-size:0.9rem;">Archive this project</div>
+                <div style="font-size:0.8rem; color:var(--text-muted);">Hide it from your active projects list. You can restore it anytime.</div>
+              </div>
+              <button type="button" class="btn-ghost" id="settings-archive-btn">Archive</button>
+            </div>
+            <div class="d-flex justify-content-between align-items-center">
+              <div>
+                <div style="font-weight:600; font-size:0.9rem;">Delete this project</div>
+                <div style="font-size:0.8rem; color:var(--text-muted);">Permanently delete this project. This cannot be undone.</div>
+              </div>
+              <button type="button" class="btn-ghost" id="settings-delete-btn" style="color:var(--danger); border-color:var(--danger);">Delete</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="../assets/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
+<script src="../assets/js/config.js"></script>
+<script src="../assets/js/api.js"></script>
+<script src="../assets/js/theme.js"></script>
+<script src="../assets/js/toast.js"></script>
+<script src="../assets/js/nav.js"></script>
+<script src="../assets/js/auth.js"></script>
+<script src="../assets/js/modals.js"></script>
+<script src="../assets/js/workspace-layout.js"></script>
+<script src="../assets/js/project-workspace.js"></script>
+</body>
+</html>
