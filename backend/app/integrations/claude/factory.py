@@ -3,9 +3,10 @@ from app.integrations.claude.anthropic_provider import AnthropicApiProvider
 from app.integrations.claude.base import ClaudeProvider, ProviderStatus
 from app.integrations.claude.errors import ProviderNotConfiguredError
 
-_SETUP_INSTRUCTIONS = (
-    "Set the ANTHROPIC_API_KEY environment variable (and optionally "
-    "CLAUDE_MODEL) on the backend, then restart the server."
+_NOT_CONFIGURED_MESSAGE = (
+    "Claude provider is not configured. Please configure the Anthropic API "
+    "credentials in the backend environment (set ANTHROPIC_API_KEY, and "
+    "optionally CLAUDE_MODEL, then restart the server)."
 )
 
 
@@ -20,9 +21,7 @@ def get_claude_provider() -> ClaudeProvider:
 
     if settings.claude_provider == "anthropic":
         if not settings.anthropic_api_key:
-            raise ProviderNotConfiguredError(
-                f"No Claude provider is configured. {_SETUP_INSTRUCTIONS}"
-            )
+            raise ProviderNotConfiguredError(_NOT_CONFIGURED_MESSAGE)
         return AnthropicApiProvider(
             api_key=settings.anthropic_api_key,
             model=settings.claude_model,
