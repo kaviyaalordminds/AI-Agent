@@ -4,12 +4,10 @@ os.environ["APP_ENV"] = "testing"
 os.environ["DATABASE_URL"] = "postgresql+psycopg://ai_agent:ai_agent@localhost:5432/ai_agent_test"
 os.environ["EMAIL_PROVIDER"] = "console"
 os.environ["SESSION_COOKIE_SECURE"] = "false"
-# "testing" resolves to AI_RUNTIME_MODE=local by default (see
-# Settings.resolved_ai_runtime_mode), which would default AI_PROVIDER to
-# "ollama" — pin it to "anthropic" so the existing suite's "Claude
-# provider is not configured" assertions keep exercising the same
-# provider they were written against. test_ai_providers.py separately
-# covers the Ollama/Gemini not-configured paths by overriding this per-test.
+# Anthropic is the default AI_PROVIDER in every runtime mode (no local/
+# Ollama option), but pin it explicitly so the suite is never sensitive to
+# that default changing. test_ai_providers.py separately covers the
+# Gemini not-configured path by overriding this per-test.
 os.environ["AI_PROVIDER"] = "anthropic"
 
 import pytest

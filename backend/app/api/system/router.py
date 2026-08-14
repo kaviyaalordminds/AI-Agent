@@ -1,4 +1,3 @@
-import httpx
 from fastapi import APIRouter, Depends
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -96,19 +95,6 @@ def _check_database(db: Session) -> ComponentHealthOut:
 
 
 async def _check_ai_provider() -> ComponentHealthOut:
-    settings = get_settings()
-    if settings.resolved_ai_provider == "ollama":
-        try:
-            async with httpx.AsyncClient(timeout=2.0) as client:
-                resp = await client.get(f"{settings.ollama_base_url}/api/tags")
-            if resp.status_code == 200:
-                return ComponentHealthOut(status="ok", detail=f"Ollama reachable at {settings.ollama_base_url}.")
-            return ComponentHealthOut(
-                status="degraded", detail=f"Ollama responded with status {resp.status_code}."
-            )
-        except httpx.RequestError as exc:
-            return ComponentHealthOut(status="down", detail=f"Ollama unreachable: {exc}")
-
     status_obj = get_claude_status()
     if status_obj.configured:
         return ComponentHealthOut(

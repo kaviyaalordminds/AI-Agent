@@ -8,38 +8,40 @@ full end-state vision.
 ## Runtime modes: local development vs. production
 
 The same codebase supports two clearly separated runtime modes, switched
-purely through environment configuration — no code changes required:
+purely through environment configuration — no code changes required.
+This split applies to the media-generation provider families (audio/
+transcription/image/video/voice — each has its own local-vs-cloud
+`*_PROVIDER` setting). **It does not apply to the AI chat/reasoning
+provider**, which is always **Claude via the Anthropic API** in every
+mode — there is no local/Ollama/self-hosted-LLM option anywhere in this
+application:
 
 - **Local development / testing** (`AI_RUNTIME_MODE=local`, the default
-  for `APP_ENV=development`/`testing`): prefers providers that need no
-  cloud credentials. The default AI provider is **Ollama**
-  (`AI_PROVIDER=ollama`) — install it locally and set `OLLAMA_MODEL`, or
-  leave it unconfigured and every other feature still works, with AI
-  features honestly reporting "not configured." See
-  `.env.development.example`.
+  for `APP_ENV=development`/`testing`): media-generation providers
+  prefer no-cloud-credential local backends where one exists (e.g. local
+  TTS via `espeak-ng`). AI Chat still requires `ANTHROPIC_API_KEY` — with
+  no key set, every other feature still works, with AI features honestly
+  reporting "not configured." See `.env.development.example`.
 - **Production** (`AI_RUNTIME_MODE=production`, the default for
-  `APP_ENV=staging`/`production`): prefers configured cloud providers —
-  `AI_PROVIDER=anthropic` (Claude) or `AI_PROVIDER=gemini` are both real,
-  working implementations selected purely by environment variable.
-  Ollama also works in production if you're self-hosting a model server.
-  See `.env.production.example`.
+  `APP_ENV=staging`/`production`): media-generation providers prefer
+  configured cloud vendors. See `.env.production.example`.
 
 A single factory (`get_claude_provider()` in
 `app/integrations/claude/factory.py` — kept under that name for backward
 compatibility with every existing call site, but it is the platform's
-general AI-provider factory, not Claude-specific) resolves
-`AI_RUNTIME_MODE`/`AI_PROVIDER` into a concrete provider on every call.
-**A missing or misconfigured AI provider never crashes the backend or
-blocks unrelated features** — auth, projects, history, Obsidian,
-Documents (listing/deleting), and every system/capability endpoint work
-regardless; only the AI-dependent generation step inside AI Chat,
-Knowledge Gaps, and Document drafting is gated, and it fails honestly
-(persisting the user's input first) rather than faking a response.
+general AI-provider factory, not Claude-specific) resolves `AI_PROVIDER`
+into a concrete provider on every call: `anthropic` (the default) or
+`gemini`. **A missing or misconfigured AI provider never crashes the
+backend or blocks unrelated features** — auth, projects, history,
+Obsidian, Documents (listing/deleting), and every system/capability
+endpoint work regardless; only the AI-dependent generation step inside
+AI Chat, Knowledge Gaps, and Document drafting is gated, and it fails
+honestly (persisting the user's input first) rather than faking a
+response.
 
-This same local/production split applies to every other provider
-category — see **Provider architecture** below — and is visible live at
-runtime via `GET /api/system/capabilities` and the **System Status**
-page (Settings → System Status, or the sidebar's own entry).
+The local/production split for media-generation providers is visible
+live at runtime via `GET /api/system/capabilities` and the **System
+Status** page (Settings → System Status, or the sidebar's own entry).
 
 ## What's implemented (Phase 1–7: Foundation, Authentication, Core UI, AI Agent, Obsidian, Knowledge Intelligence, Document Generation & Production-Ready Provider Architecture)
 
@@ -136,11 +138,10 @@ page (Settings → System Status, or the sidebar's own entry).
   S3/GCS-backed provider drops in without touching call sites. Generated
   file references (never raw filesystem paths) are the only thing that
   ever reaches Postgres or the API response.
-- **Ollama + Gemini AI providers**: alongside Anthropic, `OllamaProvider`
-  (real local-model streaming via a running `ollama serve`, no API key)
-  and `GeminiProvider` (real Google Gemini API access) both implement the
-  same provider interface — switching between all three is a single
-  `AI_PROVIDER` environment variable, no code changes.
+- **Gemini AI provider**: alongside Anthropic (the default), `GeminiProvider`
+  (real Google Gemini API access) implements the same provider interface —
+  switching between the two is a single `AI_PROVIDER` environment
+  variable, no code changes. There is no local/Ollama chat provider.
 - **Audio/Transcription/Image/Video/Voice provider architecture**: each
   is a real interface + local/cloud factory + honest capability
   detection (`GET /api/system/capabilities`) — never a fake "it works"
@@ -172,10 +173,9 @@ page (Settings → System Status, or the sidebar's own entry).
   change for no benefit) — the job queue is new infrastructure ready for
   Image/Video/Audio generation phases to build on.
 - **`GET /health`** (bare liveness check) and **`GET /api/system/providers/health`**
-  (deeper checks: database, AI provider — a real Ollama reachability
-  ping in local mode, or configuration-level for cloud providers —
-  Obsidian, storage, job queue) never expose secrets, only status/detail
-  text.
+  (deeper checks: database, AI provider — configuration-level, since it's
+  a cloud API — Obsidian, storage, job queue) never expose secrets, only
+  status/detail text.
 - **No credit/usage-limit system** — by design, per the product spec.
   Rate limiting, concurrent-job limits, and file-size limits exist as
   technical infrastructure protection, configurable via environment
@@ -264,33 +264,31 @@ the product spec explicitly forbids fake success states, so until a
 module has a real backend behind it, its UI (or the agent itself) says
 so rather than pretending.
 
-### Configuring an AI provider (Ollama, Claude, or Gemini)
+### Configuring an AI provider (Claude or Gemini — no local LLM)
 
 This deployment's default local environment has no cloud API key
 configured, so `/api/agent/status` honestly reports "not configured" and
 every chat/gap-analysis/document-drafting request gets a clear,
-actionable error instead of a fabricated reply. Three real providers are
-available — pick one via `AI_PROVIDER`:
+actionable error instead of a fabricated reply. **Claude (Anthropic) is
+the default AI provider in every runtime mode; there is no Ollama or
+other local/self-hosted-LLM option.** Two real providers are available —
+pick one via `AI_PROVIDER`:
 
 ```bash
-# backend/.env — Option 1: Ollama (local, no API key)
-AI_PROVIDER=ollama
-OLLAMA_BASE_URL=http://localhost:11434
-OLLAMA_MODEL=llama3.1          # any model you've `ollama pull`ed
-
-# Option 2: Anthropic Claude
+# backend/.env — Option 1: Anthropic Claude (the default)
 AI_PROVIDER=anthropic
 ANTHROPIC_API_KEY=sk-ant-...
 CLAUDE_MODEL=claude-sonnet-5    # optional, this is the default
+CLAUDE_MAX_OUTPUT_TOKENS=4096   # optional, this is the default
 
-# Option 3: Google Gemini
+# Option 2: Google Gemini
 AI_PROVIDER=gemini
 GOOGLE_API_KEY=...
 GEMINI_MODEL=gemini-2.0-flash   # optional, this is the default
 ```
 
-Restart the backend — no code changes required for any of the three.
-The Settings → AI Provider tab, the dashboard's connection widget, and
+Restart the backend — no code changes required for either. The
+Settings → AI Provider tab, the dashboard's connection widget, and
 `GET /api/system/capabilities` all reflect the real status immediately.
 AI Chat, Knowledge Gaps, and Documents all reuse this exact same
 provider and configuration — no separate credential is needed per
@@ -373,9 +371,11 @@ backend/
     services/email/       EmailProvider abstraction (console/SMTP + factory)
     integrations/
       claude/               general AI-provider factory (kept under this name
-                            for backward compat): AnthropicApiProvider,
-                            OllamaProvider, GeminiProvider + utils.complete()
-                            shared stream-to-string helper
+                            for backward compat): AnthropicApiProvider (the
+                            default), GeminiProvider + utils.complete()
+                            shared stream-to-string helper. No local/Ollama
+                            provider — Claude via the Anthropic API is
+                            always used unless AI_PROVIDER=gemini.
       obsidian/              ObsidianProvider/KnowledgeProvider abstraction
                             (LocalVaultProvider, markdown tag/link parsing,
                             path-safety + factory; get_knowledge_provider alias)
@@ -546,13 +546,15 @@ alembic upgrade head
 py -m uvicorn app.main:app --reload --port 8000
 ```
 
-Local development works with **zero cloud API keys** — the default
-`.env.development.example` targets Ollama (optional; the backend starts
-and every non-AI feature works even without it installed — see
-**Runtime modes** above). XAMPP or another local Windows LAMP/WAMP-style
-stack is *not* required or assumed anywhere in this codebase; Postgres
-via `docker-compose.yml` (or any reachable Postgres instance) plus a
-plain Python virtualenv is the full local dependency set on any OS.
+The backend starts with **zero cloud API keys** — every non-AI feature
+(auth, projects, history, Obsidian, Documents storage, jobs, system
+status) works with `ANTHROPIC_API_KEY` unset; AI Chat/Knowledge Gaps/
+Document drafting honestly report "not configured" until you add one
+(see **Configuring an AI provider** above — there is no local/Ollama
+fallback). XAMPP or another local Windows LAMP/WAMP-style stack is *not*
+required or assumed anywhere in this codebase; Postgres via
+`docker-compose.yml` (or any reachable Postgres instance) plus a plain
+Python virtualenv is the full local dependency set on any OS.
 
 API docs: http://localhost:8000/api/docs (disabled in production).
 
@@ -617,11 +619,11 @@ real docx/pdf rendering, including empty-content edge cases; and the
 success path verified for all three formats — markdown, real .docx
 zip/PDF magic bytes — download content-type/filename correctness,
 cross-user ownership isolation, and `document` History logging), the AI
-provider architecture (`resolved_ai_runtime_mode`/`resolved_ai_provider`
-mode-derivation logic, Ollama's not-configured and — a real network call
-against an intentionally-unreachable local port — unreachable-server
-paths, Gemini's not-configured path, an unknown-provider-name fallback),
-the five generation provider families (real local audio synthesis via
+provider architecture (`resolved_ai_provider` always defaulting to
+Anthropic regardless of runtime mode, an explicit `AI_PROVIDER=gemini`
+override, Gemini's not-configured path, an unknown-provider-name
+fallback — there is no Ollama/local-LLM provider to test), the five
+generation provider families (real local audio synthesis via
 `espeak-ng` producing an actual playable WAV, and the honest
 "unavailable"/not-configured contract for transcription/image/video/
 voice — including voice cloning's consent-required check), the
@@ -651,14 +653,11 @@ the Excel chart path), plus a regression test proving the AI-drafted
 against a real PostgreSQL test database and a real (temp-directory)
 filesystem vault/storage root, no mocked ORM and no mocked filesystem.
 
-There is deliberately no test that calls a real Anthropic, Gemini, or
-Ollama API over the network: this deployment's test environment pins
+There is deliberately no test that calls a real Anthropic or Gemini API
+over the network: this deployment's test environment pins
 `AI_PROVIDER=anthropic` with no `ANTHROPIC_API_KEY` configured (see
 "Configuring an AI provider" above), and the honest "not configured"
-path is exactly what's under test — except for the one real Ollama
-reachability check, which deliberately targets `localhost:11434` (no
-server there in CI) to prove the "provider unreachable" failure path is
-genuine, not mocked.
+path is exactly what's under test.
 
 ## Production deployment
 
@@ -684,8 +683,7 @@ Job queue (swap JobQueue's implementation for a Celery/RQ/Dramatiq-backed
 Workers (optionally GPU-backed, once local Image/Video/Voice generation
   backends are configured)
   +
-External AI providers (Anthropic/Gemini in production mode, or a
-  self-hosted Ollama server reachable from the backend)
+External AI providers (Anthropic — the default — or Gemini)
 ```
 
 This is deliberately **not** designed around one developer's machine —
@@ -709,7 +707,7 @@ This repo follows the phased plan from the product spec:
 1. ✅ **Foundation** — repo structure, backend/frontend skeleton, Postgres, env config
 2. ✅ **Authentication** — signup/login/verify/reset/sessions/profile
 3. ✅ **Core UI** — reusable full-screen/split-screen workspace shell, history, projects UI
-4. ✅ **AI Agent** — AI provider architecture (Ollama/Anthropic/Gemini, mode-aware factory), orchestrator, chat, streaming, 7 modes (tool-calling architecture still to come)
+4. ✅ **AI Agent** — AI provider architecture (Anthropic/Gemini, no local-LLM option), orchestrator, chat, streaming, 7 modes (tool-calling architecture still to come)
 5. ✅ **Obsidian** — per-user vault (never a shared/global one), search/read/create/update/append/move/delete/get_metadata, connection status, Knowledge/Research mode grounding (MCP/REST bridge to a live Obsidian.app instance is a possible future provider — the current one operates directly on vault files, which is what a live Obsidian instance is backed by anyway)
 6. ✅ **Knowledge Intelligence** — gap/duplicate/outdated/broken-link/orphan detection, health score, knowledge graph, AI-backed gap analysis, knowledge-update history, auto-update policy setting (Auto/Approval/Smart Auto — saved now, ready for the future automatic-apply capability)
 7. 🟡 **Creative tools** — image/audio/video/document/design generation. **Document generation is done**: AI-drafted content rendered to real Markdown/.docx/.pdf via `StorageProvider`, gated honestly by AI provider configuration. **Structured Word/PowerPoint/Excel generation is done**: `POST /api/generation/document/{word,ppt,excel}` render real .docx/.pptx/.xlsx files from caller-supplied structured content (headings/paragraphs/lists/tables; slides/bullets/notes; sheets/rows/formulas/charts) via `python-docx`/`python-pptx`/`openpyxl` — no AI provider required. **Local audio (TTS) generation is done**: real `espeak-ng`-backed synthesis through the job queue (`POST /api/jobs/audio`). **Image and video generation via Gemini are done**: `GeminiImageProvider` (Imagen `:predict`) and `GeminiVideoProvider` (Veo `:predictLongRunning` + poll + download) are real REST-based providers, selected when `GEMINI_API_KEY`/`GOOGLE_API_KEY` + `IMAGE_PROVIDER=cloud`/`VIDEO_PROVIDER=cloud` are configured; both run through the `GenerationJob` queue (`POST /api/generation/image`, `POST /api/generation/video`) with real status polling and download. Full provider architecture (interface + local/cloud factory + honest capability detection) exists for all five generation categories (Audio/Transcription/Image/Video/Voice) plus Deployment — Transcription/Voice cloning remain ⬜ for actual generation (each needs a real backend/GPU/model or a real external vendor integration), but report exactly why via `GET /api/system/capabilities` rather than pretending to work. Website/3D Website/Poster/Logo/Graphic Design generation itself remain ⬜.

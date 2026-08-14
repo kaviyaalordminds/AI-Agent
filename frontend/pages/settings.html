@@ -145,14 +145,12 @@
               </div>
               <hr style="border-color: var(--border-subtle);" class="my-3">
               <p style="font-size:0.78rem; color:var(--text-muted);" class="mb-0">
-                The active AI provider is chosen server-side and never exposed to the browser. Local
-                development defaults to <strong>Ollama</strong> (no cloud key required) — install
-                <a href="https://ollama.com" target="_blank" rel="noopener">Ollama</a>, pull a model, and set
-                <code>OLLAMA_MODEL</code>. Production can instead set <code>AI_PROVIDER=anthropic</code> with
-                <code>ANTHROPIC_API_KEY</code>, or <code>AI_PROVIDER=gemini</code> with
-                <code>GOOGLE_API_KEY</code>, as backend environment variables — then restart the server. No
-                code changes are required to switch providers, and credentials are never sent to or stored in
-                the browser.
+                The active AI provider is chosen server-side and never exposed to the browser. By default
+                this application uses <strong>Claude</strong> — set <code>ANTHROPIC_API_KEY</code> (and
+                optionally <code>CLAUDE_MODEL</code>) as backend environment variables and restart the
+                server. Set <code>AI_PROVIDER=gemini</code> with <code>GOOGLE_API_KEY</code> to use Gemini
+                for chat/reasoning instead. There is no local/Ollama option. No code changes are required to
+                switch providers, and credentials are never sent to or stored in the browser.
               </p>
             </div>
           </div>

@@ -1,11 +1,9 @@
 import pytest
 
 from app.core.config import get_settings
-from app.integrations.claude.base import ClaudeMessage
-from app.integrations.claude.errors import ProviderNotConfiguredError, ProviderRequestError
+from app.integrations.claude.errors import ProviderNotConfiguredError
 from app.integrations.claude.factory import get_claude_provider, get_claude_status
 from app.integrations.claude.gemini_provider import GeminiProvider
-from app.integrations.claude.ollama_provider import OllamaProvider
 
 
 @pytest.fixture
@@ -19,41 +17,36 @@ def _restore_ai_settings(settings):
     pattern as the storage/obsidian tmp-root fixtures) — restore every
     field afterwards so other test modules keep seeing the conftest
     baseline (AI_PROVIDER=anthropic)."""
-    original = (
-        settings.ai_provider,
-        settings.ai_runtime_mode,
-        settings.ollama_model,
-        settings.ollama_base_url,
-        settings.google_api_key,
-    )
+    original = (settings.ai_provider, settings.ai_runtime_mode, settings.google_api_key)
     yield
-    (
-        settings.ai_provider,
-        settings.ai_runtime_mode,
-        settings.ollama_model,
-        settings.ollama_base_url,
-        settings.google_api_key,
-    ) = original
+    (settings.ai_provider, settings.ai_runtime_mode, settings.google_api_key) = original
 
 
-class TestRuntimeModeResolution:
-    def test_local_mode_defaults_to_ollama(self, settings):
+class TestProviderResolution:
+    def test_default_provider_is_anthropic(self, settings):
+        """No local-LLM/Ollama option exists — Anthropic is the default AI
+        chat/reasoning provider regardless of runtime mode."""
+        settings.ai_provider = None
+        assert settings.resolved_ai_provider == "anthropic"
+
+    def test_local_mode_still_defaults_to_anthropic(self, settings):
         settings.ai_runtime_mode = "local"
         settings.ai_provider = None
         assert settings.resolved_ai_runtime_mode == "local"
-        assert settings.resolved_ai_provider == "ollama"
+        assert settings.resolved_ai_provider == "anthropic"
 
     def test_production_mode_defaults_to_anthropic(self, settings):
         settings.ai_runtime_mode = "production"
         settings.ai_provider = None
         assert settings.resolved_ai_provider == "anthropic"
 
-    def test_explicit_provider_overrides_mode_default(self, settings):
-        settings.ai_runtime_mode = "local"
+    def test_explicit_provider_overrides_default(self, settings):
         settings.ai_provider = "gemini"
         assert settings.resolved_ai_provider == "gemini"
 
-    def test_app_env_drives_mode_when_unset(self, settings):
+    def test_app_env_drives_runtime_mode_when_unset(self, settings):
+        """AI_RUNTIME_MODE still governs other provider families (image/
+        video/etc.) even though it no longer affects the AI chat provider."""
         settings.ai_runtime_mode = None
         original_env = settings.app_env
         try:
@@ -63,46 +56,6 @@ class TestRuntimeModeResolution:
             assert settings.resolved_ai_runtime_mode == "local"
         finally:
             settings.app_env = original_env
-
-
-class TestOllamaProvider:
-    def test_not_configured_without_model(self, settings):
-        settings.ai_provider = "ollama"
-        settings.ollama_model = ""
-        with pytest.raises(ProviderNotConfiguredError, match="OLLAMA_MODEL"):
-            get_claude_provider()
-
-    def test_status_reports_configured_once_model_set(self, settings):
-        settings.ai_provider = "ollama"
-        settings.ollama_model = "llama3.1"
-        settings.ollama_base_url = "http://localhost:11434"
-        provider = get_claude_provider()
-        assert isinstance(provider, OllamaProvider)
-        status = provider.status()
-        assert status.configured is True
-        assert status.provider == "ollama"
-        assert status.model == "llama3.1"
-
-    @pytest.mark.asyncio
-    async def test_unreachable_ollama_raises_real_error_not_fake_response(self, settings):
-        """No Ollama server is running in the test environment — this must
-        surface as a real ProviderRequestError, never a fabricated reply."""
-        settings.ai_provider = "ollama"
-        settings.ollama_model = "llama3.1"
-        settings.ollama_base_url = "http://localhost:11434"
-        provider = get_claude_provider()
-
-        with pytest.raises(ProviderRequestError, match="Could not reach Ollama"):
-            async for _ in provider.stream([ClaudeMessage(role="user", content="hi")], "system"):
-                pass
-
-    def test_status_endpoint_reports_unconfigured_ollama_honestly(self, settings):
-        settings.ai_provider = "ollama"
-        settings.ollama_model = ""
-        status = get_claude_status()
-        assert status.configured is False
-        assert status.provider == "ollama"
-        assert "OLLAMA_MODEL" in status.detail
 
 
 class TestGeminiProvider:

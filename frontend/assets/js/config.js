@@ -4,11 +4,11 @@
  * different origin than http://localhost:8000. */
 window.AIAgentConfig = {
   apiBase: window.__AIAGENT_API_BASE__ || "http://localhost:8000/api",
-  /* AI_PROVIDER is configurable server-side (ollama/anthropic/gemini) —
-   * never hard-code "Claude" in status text, since the active provider
-   * can be a local one with no cloud credentials at all. */
+  /* AI_PROVIDER is configurable server-side (anthropic/gemini) — never
+   * hard-code "Claude" in status text, since Gemini is also a valid
+   * choice for chat/reasoning. */
   aiProviderLabel(providerKey) {
-    const labels = { ollama: "Ollama", anthropic: "Claude", gemini: "Gemini" };
+    const labels = { anthropic: "Claude", gemini: "Gemini" };
     return labels[providerKey] || providerKey || "AI provider";
   },
 };

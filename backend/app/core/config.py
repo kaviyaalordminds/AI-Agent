@@ -48,28 +48,31 @@ class Settings(BaseSettings):
     rate_limit_max_requests: int = 10
 
     # --- AI runtime mode ---
-    # "local": prefer providers that need no cloud credentials (Ollama).
-    # "production": prefer configured cloud providers. If unset, derived
-    # from app_env (development/testing -> local, staging/production ->
-    # production) by `resolved_ai_runtime_mode` below — so a bare
-    # `APP_ENV=production` alone already does the right thing.
+    # Governs *other* provider families' local-vs-cloud default (TTS/
+    # transcription/image/video/voice each have their own local/cloud
+    # setting below, e.g. IMAGE_PROVIDER) and is surfaced as informational
+    # metadata by GET /api/system/capabilities. If unset, derived from
+    # app_env (development/testing -> local, staging/production ->
+    # production) by `resolved_ai_runtime_mode` below.
+    #
+    # It does NOT affect which AI chat/reasoning provider is used — that
+    # is always Anthropic (Claude) unless AI_PROVIDER explicitly selects
+    # "gemini". This application never uses Ollama or any local/self-hosted
+    # LLM for chat/reasoning, in any mode.
     ai_runtime_mode: AIRuntimeMode | None = None
-    # Explicit provider override. If unset, derived from
-    # resolved_ai_runtime_mode ("local" -> ollama, "production" -> anthropic).
-    ai_provider: Literal["ollama", "anthropic", "gemini"] | None = None
+    # Explicit provider override. If unset, defaults to "anthropic" — see
+    # resolved_ai_provider below.
+    ai_provider: Literal["anthropic", "gemini"] | None = None
 
     # --- Claude provider (kept for backward compatibility; get_claude_provider()
-    # now dispatches on ai_provider/ai_runtime_mode, see app/integrations/claude/factory.py) ---
+    # now dispatches on ai_provider, see app/integrations/claude/factory.py) ---
     claude_provider: Literal["anthropic"] = "anthropic"
     anthropic_api_key: str | None = None
     claude_model: str = "claude-sonnet-5"
     claude_max_output_tokens: int = 4096
 
-    # --- Ollama provider (local mode default AI provider; no API key needed) ---
-    ollama_base_url: str = "http://localhost:11434"
-    ollama_model: str = ""  # must be set explicitly — no default model is assumed installed
-
-    # --- Gemini provider (production-mode cloud alternative to Anthropic) ---
+    # --- Gemini provider (alternative chat/reasoning provider to Anthropic;
+    # also used for image/video media generation, see below) ---
     google_api_key: str | None = None
     gemini_model: str = "gemini-2.0-flash"
 
@@ -163,10 +166,11 @@ class Settings(BaseSettings):
         return "production" if self.app_env in ("staging", "production") else "local"
 
     @property
-    def resolved_ai_provider(self) -> Literal["ollama", "anthropic", "gemini"]:
-        if self.ai_provider is not None:
-            return self.ai_provider
-        return "ollama" if self.resolved_ai_runtime_mode == "local" else "anthropic"
+    def resolved_ai_provider(self) -> Literal["anthropic", "gemini"]:
+        """Anthropic (Claude) is the default AI chat/reasoning provider in
+        every runtime mode. Set AI_PROVIDER=gemini to use Gemini instead —
+        there is no local/Ollama option."""
+        return self.ai_provider or "anthropic"
 
     @property
     def resolved_gemini_api_key(self) -> str | None:
