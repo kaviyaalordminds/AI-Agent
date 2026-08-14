@@ -1,0 +1,48 @@
+/* System Status page + Settings > System Status tab */
+
+.capability-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 0.9rem;
+}
+
+.capability-card {
+  padding: 1.1rem;
+  border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.capability-card .cap-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.capability-card .cap-name {
+  font-weight: 600;
+  font-size: 0.92rem;
+  text-transform: capitalize;
+}
+.capability-card .cap-meta {
+  font-size: 0.74rem;
+  color: var(--text-muted);
+}
+.capability-card .cap-reason {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.health-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.7rem 0.85rem;
+  border-radius: var(--radius-md);
+  background: var(--bg-surface-alt);
+  margin-bottom: 0.5rem;
+}
+.health-row:last-child { margin-bottom: 0; }
+.health-row .health-name { font-weight: 600; font-size: 0.85rem; text-transform: capitalize; }
+.health-row .health-detail { font-size: 0.76rem; color: var(--text-muted); margin-top: 0.15rem; }

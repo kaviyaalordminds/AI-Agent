@@ -6,7 +6,7 @@ import pytest
 from app.documents.render import parse_markdown_blocks, render_docx, render_pdf
 from app.integrations.claude.base import ClaudeProvider, ProviderStatus
 from app.integrations.claude.errors import ProviderRequestError
-from app.integrations.storage.errors import InvalidStoragePathError
+from app.integrations.storage.errors import FileTooLargeError, InvalidStoragePathError
 from app.integrations.storage.local_provider import LocalStorageProvider
 
 
@@ -21,6 +21,21 @@ class TestLocalStorageProvider:
         stored = provider.write("documents", "user-1", "a.txt", b"hello")
         assert stored.size_bytes == 5
         assert provider.read(stored.ref) == b"hello"
+
+    def test_write_within_size_limit_succeeds(self, tmp_path):
+        provider = LocalStorageProvider(tmp_path / "storage", max_file_size_bytes=100)
+        stored = provider.write("documents", "user-1", "small.txt", b"x" * 50)
+        assert stored.size_bytes == 50
+
+    def test_write_over_size_limit_rejected(self, tmp_path):
+        provider = LocalStorageProvider(tmp_path / "storage", max_file_size_bytes=100)
+        with pytest.raises(FileTooLargeError):
+            provider.write("documents", "user-1", "big.txt", b"x" * 101)
+
+    def test_no_size_limit_by_default(self, tmp_path):
+        provider = LocalStorageProvider(tmp_path / "storage")
+        stored = provider.write("documents", "user-1", "big.txt", b"x" * 1_000_000)
+        assert stored.size_bytes == 1_000_000
 
     def test_delete_then_read_raises(self, tmp_path):
         provider = LocalStorageProvider(tmp_path / "storage")

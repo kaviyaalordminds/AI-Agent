@@ -41,19 +41,20 @@ async function loadStatus() {
     const s = await window.AIAgentApi.get("/agent/status");
     claudeConfigured = s.configured;
     const badge = document.getElementById("claude-status-badge");
+    const providerLabel = window.AIAgentConfig.aiProviderLabel(s.provider);
     if (s.configured) {
       badge.className = "badge-pill badge-success";
-      badge.innerHTML = `<span class="dot dot-success"></span> Claude connected (${s.model})`;
+      badge.innerHTML = `<span class="dot dot-success"></span> ${providerLabel} connected (${s.model})`;
       document.getElementById("provider-banner").classList.add("d-none");
     } else {
       badge.className = "badge-pill badge-warning";
-      badge.innerHTML = `<span class="dot dot-muted"></span> Claude not configured`;
+      badge.innerHTML = `<span class="dot dot-muted"></span> ${providerLabel} not configured`;
       document.getElementById("provider-banner").classList.remove("d-none");
       document.getElementById("provider-banner-text").textContent =
         `${s.detail} You can still create conversations — messages will show this same error until it's configured.`;
     }
   } catch (err) {
-    window.AIAgentToast.show("Could not check Claude connection status.", "error");
+    window.AIAgentToast.show("Could not check AI provider connection status.", "error");
   }
 }
 

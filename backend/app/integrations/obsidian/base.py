@@ -44,7 +44,26 @@ class VaultStatus:
     folders: list[str] = field(default_factory=list)
 
 
+@dataclass
+class NoteMetadata:
+    path: str
+    title: str
+    folder: str
+    tags: list[str]
+    links: list[str]
+    created_at: datetime
+    updated_at: datetime
+    size_bytes: int
+
+
 class ObsidianProvider(ABC):
+    """This is also the platform's KnowledgeProvider implementation (see
+    KNOWLEDGE_PROVIDER in app/core/config.py) — Obsidian is currently the
+    only knowledge backend, so a separate KnowledgeProvider ABC would just
+    duplicate this one. get_knowledge_provider() in factory.py is a
+    documented alias of get_obsidian_provider() for callers that want the
+    general-purpose name."""
+
     @abstractmethod
     def status(self) -> VaultStatus:
         raise NotImplementedError
@@ -79,4 +98,8 @@ class ObsidianProvider(ABC):
 
     @abstractmethod
     def move_note(self, path: str, new_path: str) -> NoteDetail:
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_metadata(self, path: str) -> NoteMetadata:
         raise NotImplementedError

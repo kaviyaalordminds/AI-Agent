@@ -2,7 +2,7 @@ import re
 from pathlib import Path
 
 from app.integrations.storage.base import StorageProvider, StoredFile
-from app.integrations.storage.errors import InvalidStoragePathError
+from app.integrations.storage.errors import FileTooLargeError, InvalidStoragePathError
 
 _SAFE_SEGMENT = re.compile(r"^[A-Za-z0-9._-]+$")
 
@@ -19,9 +19,10 @@ class LocalStorageProvider(StorageProvider):
     required. A future S3Provider/GCSProvider would implement the same
     interface without any call site changing."""
 
-    def __init__(self, root: Path) -> None:
+    def __init__(self, root: Path, max_file_size_bytes: int | None = None) -> None:
         self.root = root.resolve()
         self.root.mkdir(parents=True, exist_ok=True)
+        self._max_file_size_bytes = max_file_size_bytes
 
     def _resolve(self, category: str, owner_id: str, filename: str) -> Path:
         category = _validate_segment(category, "category")
@@ -42,6 +43,10 @@ class LocalStorageProvider(StorageProvider):
         return resolved
 
     def write(self, category: str, owner_id: str, filename: str, data: bytes) -> StoredFile:
+        if self._max_file_size_bytes is not None and len(data) > self._max_file_size_bytes:
+            raise FileTooLargeError(
+                f"File is {len(data)} bytes, exceeding the {self._max_file_size_bytes}-byte limit."
+            )
         path = self._resolve(category, owner_id, filename)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(data)

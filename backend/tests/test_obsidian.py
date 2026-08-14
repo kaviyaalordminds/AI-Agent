@@ -1,4 +1,9 @@
 from app.integrations.claude.base import ProviderStatus
+from app.integrations.obsidian.factory import get_knowledge_provider, get_obsidian_provider
+
+
+def test_get_knowledge_provider_is_an_alias_for_get_obsidian_provider():
+    assert get_knowledge_provider is get_obsidian_provider
 
 
 def test_status_auto_provisions_vault(auth_client):

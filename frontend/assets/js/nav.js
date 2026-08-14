@@ -51,6 +51,7 @@ const NAV_STRUCTURE = [
   {
     label: "Settings",
     items: [
+      { key: "system-status", label: "System Status", icon: "bi-activity", href: "system-status.html", enabled: true },
       { key: "settings", label: "Settings", icon: "bi-gear", href: "settings.html", enabled: true },
       { key: "profile", label: "Profile", icon: "bi-person-circle", href: "profile.html", enabled: true },
     ],

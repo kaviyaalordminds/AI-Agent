@@ -17,6 +17,7 @@
 <link rel="stylesheet" href="../assets/css/app.css">
 <link rel="stylesheet" href="../assets/css/auth.css">
 <link rel="stylesheet" href="../assets/css/agent.css">
+<link rel="stylesheet" href="../assets/css/system-status.css">
 </head>
 <body>
 
@@ -52,10 +53,12 @@
             <div class="nav-link-item active" data-settings-tab="general"><i class="bi bi-sliders"></i> General</div>
             <div class="nav-link-item" data-settings-tab="ai"><i class="bi bi-cpu"></i> AI</div>
             <div class="nav-link-item" data-settings-tab="obsidian"><i class="bi bi-safe2"></i> Obsidian</div>
-            <div class="nav-link-item" data-settings-tab="claude"><i class="bi bi-stars"></i> Claude</div>
+            <div class="nav-link-item" data-settings-tab="claude"><i class="bi bi-stars"></i> AI Provider</div>
+            <div class="nav-link-item" data-settings-tab="storage"><i class="bi bi-hdd"></i> Storage</div>
             <div class="nav-link-item" data-settings-tab="workspace"><i class="bi bi-layout-split"></i> Workspace <span class="nav-link-badge">Soon</span></div>
             <div class="nav-link-item" data-settings-tab="security"><i class="bi bi-shield-lock"></i> Security</div>
             <div class="nav-link-item" data-settings-tab="notifications"><i class="bi bi-bell"></i> Notifications <span class="nav-link-badge">Soon</span></div>
+            <div class="nav-link-item" data-settings-tab="system-status"><i class="bi bi-activity"></i> System Status</div>
           </div>
         </div>
 
@@ -129,7 +132,7 @@
 
           <div id="tab-claude" class="settings-tab d-none">
             <div class="surface p-4">
-              <h6 class="mb-3">Claude connection</h6>
+              <h6 class="mb-3">AI provider connection</h6>
               <div id="claude-settings-status" class="d-flex align-items-center gap-2 mb-2">
                 <span class="dot dot-muted"></span>
                 <span style="font-size:0.9rem;">Checking…</span>
@@ -142,9 +145,33 @@
               </div>
               <hr style="border-color: var(--border-subtle);" class="my-3">
               <p style="font-size:0.78rem; color:var(--text-muted);" class="mb-0">
-                To connect a real Claude account: set <code>ANTHROPIC_API_KEY</code> (and optionally
-                <code>CLAUDE_MODEL</code>, default <code>claude-sonnet-5</code>) as environment variables on
-                the backend, then restart the server. Credentials are never sent to or stored in the browser.
+                The active AI provider is chosen server-side and never exposed to the browser. Local
+                development defaults to <strong>Ollama</strong> (no cloud key required) — install
+                <a href="https://ollama.com" target="_blank" rel="noopener">Ollama</a>, pull a model, and set
+                <code>OLLAMA_MODEL</code>. Production can instead set <code>AI_PROVIDER=anthropic</code> with
+                <code>ANTHROPIC_API_KEY</code>, or <code>AI_PROVIDER=gemini</code> with
+                <code>GOOGLE_API_KEY</code>, as backend environment variables — then restart the server. No
+                code changes are required to switch providers, and credentials are never sent to or stored in
+                the browser.
+              </p>
+            </div>
+          </div>
+
+          <div id="tab-storage" class="settings-tab d-none">
+            <div class="surface p-4">
+              <h6 class="mb-3">Storage</h6>
+              <div id="storage-settings-status" class="d-flex align-items-center gap-2 mb-2">
+                <span class="dot dot-muted"></span>
+                <span style="font-size:0.9rem;">Checking…</span>
+              </div>
+              <p id="storage-settings-detail" style="font-size:0.82rem; color:var(--text-muted);"></p>
+              <hr style="border-color: var(--border-subtle);" class="my-3">
+              <p style="font-size:0.78rem; color:var(--text-muted);" class="mb-0">
+                Generated documents (and future images/audio/video) are written through the
+                <code>StorageProvider</code> abstraction. The local provider writes real files under
+                <code>storage/</code> on the backend with no credentials required; production can point
+                <code>STORAGE_PROVIDER</code> at an S3-compatible backend once configured, without any
+                application code changes.
               </p>
             </div>
           </div>
@@ -182,6 +209,26 @@
               </div>
             </div>
           </div>
+
+          <div id="tab-system-status" class="settings-tab d-none">
+            <div class="surface p-4 mb-4">
+              <div class="d-flex align-items-center justify-content-between mb-3">
+                <h6 class="mb-0">Capabilities</h6>
+                <a href="system-status.html" style="font-size:0.8rem;">Open full page</a>
+              </div>
+              <div class="capability-grid" id="settings-capability-grid">
+                <div class="skeleton" style="height:120px; border-radius:14px;"></div>
+                <div class="skeleton" style="height:120px; border-radius:14px;"></div>
+              </div>
+            </div>
+            <div class="surface p-4">
+              <h6 class="mb-3">Component Health</h6>
+              <div id="settings-health-list">
+                <div class="skeleton mb-2" style="height:56px; border-radius:10px;"></div>
+                <div class="skeleton" style="height:56px; border-radius:10px;"></div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </main>
@@ -193,6 +240,7 @@
 <script src="../assets/js/theme.js"></script>
 <script src="../assets/js/toast.js"></script>
 <script src="../assets/js/nav.js"></script>
+<script src="../assets/js/system-status.js"></script>
 <script src="../assets/js/settings.js"></script>
 </body>
 </html>

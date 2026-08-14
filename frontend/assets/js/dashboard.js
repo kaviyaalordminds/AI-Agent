@@ -129,7 +129,7 @@ async function loadClaudeStatusWidget() {
       detailEl.textContent = "";
     } else {
       statusEl.innerHTML = `<span class="dot dot-muted"></span><span style="font-size:0.9rem;">Not configured</span>`;
-      detailEl.textContent = "Set ANTHROPIC_API_KEY on the backend to enable real AI responses. Configure it from Settings.";
+      detailEl.textContent = s.detail;
     }
   } catch {
     statusEl.innerHTML = `<span class="dot dot-danger"></span><span style="font-size:0.9rem;">Could not check status</span>`;

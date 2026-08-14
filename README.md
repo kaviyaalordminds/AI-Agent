@@ -5,7 +5,43 @@ platform. This repository is being built in phases (see **Roadmap**
 below); this README always reflects what's actually implemented, not the
 full end-state vision.
 
-## What's implemented (Phase 1–7: Foundation, Authentication, Core UI, AI Agent, Obsidian, Knowledge Intelligence & Document Generation)
+## Runtime modes: local development vs. production
+
+The same codebase supports two clearly separated runtime modes, switched
+purely through environment configuration — no code changes required:
+
+- **Local development / testing** (`AI_RUNTIME_MODE=local`, the default
+  for `APP_ENV=development`/`testing`): prefers providers that need no
+  cloud credentials. The default AI provider is **Ollama**
+  (`AI_PROVIDER=ollama`) — install it locally and set `OLLAMA_MODEL`, or
+  leave it unconfigured and every other feature still works, with AI
+  features honestly reporting "not configured." See
+  `.env.development.example`.
+- **Production** (`AI_RUNTIME_MODE=production`, the default for
+  `APP_ENV=staging`/`production`): prefers configured cloud providers —
+  `AI_PROVIDER=anthropic` (Claude) or `AI_PROVIDER=gemini` are both real,
+  working implementations selected purely by environment variable.
+  Ollama also works in production if you're self-hosting a model server.
+  See `.env.production.example`.
+
+A single factory (`get_claude_provider()` in
+`app/integrations/claude/factory.py` — kept under that name for backward
+compatibility with every existing call site, but it is the platform's
+general AI-provider factory, not Claude-specific) resolves
+`AI_RUNTIME_MODE`/`AI_PROVIDER` into a concrete provider on every call.
+**A missing or misconfigured AI provider never crashes the backend or
+blocks unrelated features** — auth, projects, history, Obsidian,
+Documents (listing/deleting), and every system/capability endpoint work
+regardless; only the AI-dependent generation step inside AI Chat,
+Knowledge Gaps, and Document drafting is gated, and it fails honestly
+(persisting the user's input first) rather than faking a response.
+
+This same local/production split applies to every other provider
+category — see **Provider architecture** below — and is visible live at
+runtime via `GET /api/system/capabilities` and the **System Status**
+page (Settings → System Status, or the sidebar's own entry).
+
+## What's implemented (Phase 1–7: Foundation, Authentication, Core UI, AI Agent, Obsidian, Knowledge Intelligence, Document Generation & Production-Ready Provider Architecture)
 
 - **Backend**: FastAPI (Python), modular `app/` package (`api`, `models`,
   `schemas`, `security`, `services`, `database`, `core`).
@@ -100,12 +136,58 @@ full end-state vision.
   S3/GCS-backed provider drops in without touching call sites. Generated
   file references (never raw filesystem paths) are the only thing that
   ever reaches Postgres or the API response.
+- **Ollama + Gemini AI providers**: alongside Anthropic, `OllamaProvider`
+  (real local-model streaming via a running `ollama serve`, no API key)
+  and `GeminiProvider` (real Google Gemini API access) both implement the
+  same provider interface — switching between all three is a single
+  `AI_PROVIDER` environment variable, no code changes.
+- **Audio/Transcription/Image/Video/Voice provider architecture**: each
+  is a real interface + local/cloud factory + honest capability
+  detection (`GET /api/system/capabilities`) — never a fake "it works"
+  status. **Local text-to-speech (Audio) is genuinely functional** via
+  `espeak-ng`/`espeak` when installed (`LocalTTSProvider`, real WAV
+  synthesis, no cloud key). Transcription/Image/Video/Voice honestly
+  report "unavailable" locally in a typical CPU-only environment (no
+  installed backend / no GPU+model checkpoint) with exact setup
+  instructions — they never pretend to generate output they can't.
+  Voice cloning requires an explicit consent confirmation before any
+  provider call is attempted, and voice profiles are scoped per-user.
+- **DeploymentProvider architecture**: `LocalDeploymentProvider` is real
+  and working today — it zips a project's files and stores the archive
+  via `StorageProvider` for download, no credentials required.
+  `NetlifyProvider`/`VercelProvider` are real architecture points
+  (config validation, honest "not configured" status) ready for a live
+  vendor integration.
+- **Generation job queue**: `GenerationJob` (Postgres-backed: id, user,
+  project, type, provider, status, progress, input/output metadata,
+  error, timestamps) + a `JobQueue` interface + `InProcessJobQueue` (a
+  real asyncio-based local worker pool, no Redis/Celery required for
+  local development, but interface-compatible with a future broker-backed
+  queue). `POST /api/jobs/audio` exercises the full **Frontend → Create
+  Job → Backend → Queue → Worker → Provider → Storage → Completed Job**
+  pipeline for real, using local TTS. Concurrent-job-per-user and
+  request-rate limits are enforced as technical abuse protection (not a
+  credit system). Document generation intentionally stays synchronous
+  (fast enough, and changing its API contract now would be a breaking
+  change for no benefit) — the job queue is new infrastructure ready for
+  Image/Video/Audio generation phases to build on.
+- **`GET /health`** (bare liveness check) and **`GET /api/system/providers/health`**
+  (deeper checks: database, AI provider — a real Ollama reachability
+  ping in local mode, or configuration-level for cloud providers —
+  Obsidian, storage, job queue) never expose secrets, only status/detail
+  text.
 - **No credit/usage-limit system** — by design, per the product spec.
-- **Provider-abstraction pattern**: `EmailProvider`, `ClaudeProvider`,
-  `ObsidianProvider`, and `StorageProvider` establish the pattern the
-  remaining MCP/Image/Video/Audio/Deployment integrations will follow —
-  application code never talks to a vendor SDK, external API, or the
-  filesystem directly.
+  Rate limiting, concurrent-job limits, and file-size limits exist as
+  technical infrastructure protection, configurable via environment
+  variables (`GENERATION_RATE_LIMIT_MAX_REQUESTS`,
+  `GENERATION_MAX_CONCURRENT_JOBS_PER_USER`, `MAX_UPLOAD_FILE_SIZE_MB`,
+  etc.) — never a user-visible credit balance.
+- **Provider-abstraction pattern**: `EmailProvider`, `ClaudeProvider`
+  (now a general AI-provider factory), `ObsidianProvider`,
+  `StorageProvider`, `DeploymentProvider`, and the five generation
+  provider families establish the pattern the remaining MCP/website-
+  generation integrations will follow — application code never talks to
+  a vendor SDK, external API, or the filesystem directly.
 
 Everything above is fully wired end-to-end (frontend ↔ backend ↔
 database ↔ Claude API ↔ vault filesystem) and covered by an automated
@@ -129,34 +211,48 @@ the product spec explicitly forbids fake success states, so until a
 module has a real backend behind it, its UI (or the agent itself) says
 so rather than pretending.
 
-### Configuring a real Claude connection
+### Configuring an AI provider (Ollama, Claude, or Gemini)
 
-This deployment's default environment has no `ANTHROPIC_API_KEY`, so
-`/api/agent/status` honestly reports "not configured" and every chat
-message gets a clear, actionable error instead of a fabricated reply.
-To connect a real account:
+This deployment's default local environment has no cloud API key
+configured, so `/api/agent/status` honestly reports "not configured" and
+every chat/gap-analysis/document-drafting request gets a clear,
+actionable error instead of a fabricated reply. Three real providers are
+available — pick one via `AI_PROVIDER`:
 
 ```bash
-# backend/.env
+# backend/.env — Option 1: Ollama (local, no API key)
+AI_PROVIDER=ollama
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_MODEL=llama3.1          # any model you've `ollama pull`ed
+
+# Option 2: Anthropic Claude
+AI_PROVIDER=anthropic
 ANTHROPIC_API_KEY=sk-ant-...
-CLAUDE_MODEL=claude-sonnet-5   # optional, this is the default
+CLAUDE_MODEL=claude-sonnet-5    # optional, this is the default
+
+# Option 3: Google Gemini
+AI_PROVIDER=gemini
+GOOGLE_API_KEY=...
+GEMINI_MODEL=gemini-2.0-flash   # optional, this is the default
 ```
 
-Restart the backend — no code changes required. The Settings → Claude
-tab and the dashboard's Claude Connection widget both reflect the real
-status immediately. The Knowledge Gaps and Documents pages reuse this
-exact same provider and configuration — no separate credential is
-needed for gap analysis or document drafting.
+Restart the backend — no code changes required for any of the three.
+The Settings → AI Provider tab, the dashboard's connection widget, and
+`GET /api/system/capabilities` all reflect the real status immediately.
+AI Chat, Knowledge Gaps, and Documents all reuse this exact same
+provider and configuration — no separate credential is needed per
+feature.
 
-**A missing `ANTHROPIC_API_KEY` never blocks development of new
-phases.** The provider is constructed lazily, inside a `try/except
-ProviderNotConfiguredError`, at the one call site each feature needs it
-— never at app startup — so the backend always starts cleanly and every
-other module (auth, projects, history, Obsidian, Knowledge Intelligence,
-Documents) works fully regardless of Claude's configuration state. Only
-the actual drafting/generation step inside AI Chat, Knowledge Gaps, and
-Documents is gated, and it fails honestly (persisting the user's input
-first) rather than faking a response.
+**A missing/unconfigured AI provider never blocks development of new
+phases or crashes the backend.** The provider is constructed lazily,
+inside a `try/except ProviderNotConfiguredError`, at the one call site
+each feature needs it — never at app startup — so the backend always
+starts cleanly and every other module (auth, projects, history,
+Obsidian, Knowledge Intelligence, Documents listing, Storage, Jobs,
+System Status) works fully regardless of the AI provider's configuration
+state. Only the actual drafting/generation step inside AI Chat,
+Knowledge Gaps, and Documents is gated, and it fails honestly
+(persisting the user's input first) rather than faking a response.
 
 ### Connecting a real Obsidian vault
 
@@ -179,6 +275,27 @@ today's (fully functional) implementation, and a future MCP- or REST
 API-backed provider could be swapped in via `OBSIDIAN_PROVIDER` without
 touching call sites.
 
+### Configuring local generation capabilities (audio/transcription/image/video)
+
+Check what's actually available on your machine at
+`GET /api/system/capabilities` or the **System Status** page — it's real
+detection, never a hard-coded "working" state:
+
+- **Audio (text-to-speech)** — install `espeak-ng` (`apt install
+  espeak-ng` on Linux, `brew install espeak-ng` on macOS) and it works
+  immediately with `TTS_PROVIDER=local`, no restart-required config
+  beyond having the binary on `PATH`.
+- **Transcription** — install a local Whisper backend
+  (`pip install faster-whisper` is recommended; no ffmpeg required) with
+  `TRANSCRIPTION_PROVIDER=local`.
+- **Image / Video / Voice cloning** — no bundled local backend; these
+  realistically need a GPU and multi-GB model checkpoints this
+  application does not ship. They report an honest "unavailable" status
+  with exact reasons until you either install a real local backend or
+  set `IMAGE_PROVIDER=cloud`/`VIDEO_PROVIDER=cloud`/`VOICE_PROVIDER=cloud`
+  with a real vendor integration (architecture point, not yet
+  implemented — see `app/integrations/generation/*/cloud_provider.py`).
+
 ## Architecture
 
 ```
@@ -189,18 +306,35 @@ backend/
     database/            SQLAlchemy engine/session, declarative base
     models/              User, UserSession, UserSettings, EmailVerificationToken,
                           PasswordResetToken, Project, HistoryEntry,
-                          Conversation, Message, KnowledgeAnalysis, Document
+                          Conversation, Message, KnowledgeAnalysis, Document,
+                          GenerationJob
     schemas/              Pydantic request/response models + validation
     security/             Argon2id hashing, token generation/hashing,
                           session + CSRF dependencies, rate limiting
     services/email/       EmailProvider abstraction (console/SMTP + factory)
     integrations/
-      claude/               ClaudeProvider abstraction (Anthropic API + factory
-                            + utils.complete() shared stream-to-string helper)
-      obsidian/              ObsidianProvider abstraction (LocalVaultProvider,
-                            markdown tag/link parsing, path-safety + factory)
+      claude/               general AI-provider factory (kept under this name
+                            for backward compat): AnthropicApiProvider,
+                            OllamaProvider, GeminiProvider + utils.complete()
+                            shared stream-to-string helper
+      obsidian/              ObsidianProvider/KnowledgeProvider abstraction
+                            (LocalVaultProvider, markdown tag/link parsing,
+                            path-safety + factory; get_knowledge_provider alias)
       storage/               StorageProvider abstraction (LocalStorageProvider,
-                            category+owner-namespaced, path-safety + factory)
+                            category+owner-namespaced, path-safety, file-size
+                            limit + factory)
+      deployment/            DeploymentProvider abstraction (LocalDeploymentProvider
+                            — real zip packaging via StorageProvider —,
+                            NetlifyProvider/VercelProvider architecture points)
+      generation/            errors.py (shared GenerationProviderError hierarchy)
+                            + audio/ (AudioProvider: LocalTTSProvider — real
+                            espeak-ng synthesis —, CloudTTSProvider)
+                            + transcription/ (TranscriptionProvider: LocalWhisperProvider,
+                            CloudTranscriptionProvider)
+                            + image/, video/, voice/ (same local/cloud pattern,
+                            honest capability() detection throughout)
+      capability.py           shared CapabilityStatus shape every provider
+                            family reports through GET /api/system/capabilities
     agents/                per-mode system prompts + orchestrator (chat turn:
                           persist -> build context (project + vault search for
                           Knowledge/Research modes) -> stream -> persist -> log)
@@ -208,9 +342,13 @@ backend/
                           broken-link/orphan detection, health score, graph
                           builder), gap_analysis.py (Claude-backed gap analysis,
                           same never-lose-input contract as agents/)
-    documents/              generator.py (Claude-drafted content -> render ->
+    documents/              generator.py (AI-drafted content -> render ->
                           StorageProvider, same never-lose-input contract),
                           render.py (real markdown -> docx/pdf conversion)
+    jobs/                   queue.py (JobQueue interface), in_process_queue.py
+                          (real asyncio worker pool, Celery/RQ-swappable),
+                          worker.py (Provider -> Storage -> job-row dispatcher
+                          for audio/transcription/image/video job types)
     api/
       auth/               /api/auth/* routes
       users/              /api/users/* routes
@@ -220,8 +358,11 @@ backend/
       obsidian/              /api/obsidian/* routes (notes CRUD, search, status)
       knowledge/             /api/knowledge/* routes (health, graph, gap analyses)
       documents/              /api/documents/* routes (create/list/get/download/delete)
+      jobs/                   /api/jobs/* routes (create audio job, list/get/
+                            cancel/download; concurrency + rate limiting)
+      system/                 /api/system/capabilities, /api/system/providers/health
   alembic/                DB migrations
-  tests/                  pytest suite (151 tests, real Postgres, no mocks)
+  tests/                  pytest suite (211 tests, real Postgres, no mocks)
 
 frontend/
   index.html              session-aware redirect (dashboard vs login)
@@ -230,18 +371,25 @@ frontend/
                           project-workspace, history, agent (AI Chat),
                           obsidian (vault browser), knowledge (Knowledge
                           Center), knowledge-gaps (Knowledge Gaps), documents
-                          (Documents Studio)
+                          (Documents Studio), system-status (capabilities +
+                          component health)
   assets/
     css/                  design tokens (theme.css), auth layout, app shell,
                           workspace-layout.css (full-screen/split-screen),
                           agent.css (chat UI), obsidian.css (vault browser),
                           knowledge.css (health dashboard, SVG graph, gap results),
-                          documents.css (draft form, format picker, file list)
-    js/                   api client, theme, toast, nav/shell, generic confirm
+                          documents.css (draft form, format picker, file list),
+                          system-status.css (capability cards, health rows)
+    js/                   api client (aiProviderLabel() maps the configurable
+                          AI_PROVIDER to a display name — never hard-codes
+                          "Claude"), theme, toast, nav/shell, generic confirm
                           modal, reusable split-screen/full-screen controller,
                           shared history-row renderer, SSE chat client,
                           minimal safe markdown preview renderer, force-directed
-                          SVG knowledge graph renderer, page controllers
+                          SVG knowledge graph renderer, system-status.js
+                          (shared capability-grid/health-list renderer, used by
+                          both the standalone page and the Settings tab), page
+                          controllers
     vendor/                vendored Bootstrap 5 + Bootstrap Icons (no CDN
                           dependency — see below)
   components/             (reserved for shared HTML fragments as the app grows)
@@ -251,8 +399,11 @@ storage/
                           real Obsidian vault" above)
   documents/{user_id}/…    real generated .md/.docx/.pdf files, written
                           through StorageProvider (Phase 7)
-  images/videos/audio/…    generated-asset roots for future Image/Video/
-                          Audio generation phases, same StorageProvider
+  generated_audio/{user_id}/…  real .wav files from audio generation jobs
+  deployments/{user_id}/…  real .zip archives from LocalDeploymentProvider
+  images/videos/…          generated-asset roots for Image/Video generation
+                          once a real local/cloud backend is configured,
+                          same StorageProvider
 docker-compose.yml        local PostgreSQL for development
 ```
 
@@ -292,6 +443,8 @@ silently skipped in a real deployment.
 
 ### Backend
 
+**macOS/Linux:**
+
 ```bash
 cd backend
 python3 -m venv .venv && source .venv/bin/activate
@@ -299,21 +452,44 @@ pip install -r requirements.txt
 
 # Postgres: either `docker compose up -d` from the repo root, or point
 # DATABASE_URL at any local/remote Postgres instance.
-cp .env.example .env   # edit DATABASE_URL / SECRET_KEY as needed
+cp .env.development.example .env   # or .env.production.example for prod; edit as needed
 
 alembic upgrade head
 uvicorn app.main:app --reload --port 8000
 ```
 
+**Windows:**
+
+```bat
+cd backend
+py -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+
+copy .env.development.example .env
+alembic upgrade head
+py -m uvicorn app.main:app --reload --port 8000
+```
+
+Local development works with **zero cloud API keys** — the default
+`.env.development.example` targets Ollama (optional; the backend starts
+and every non-AI feature works even without it installed — see
+**Runtime modes** above). XAMPP or another local Windows LAMP/WAMP-style
+stack is *not* required or assumed anywhere in this codebase; Postgres
+via `docker-compose.yml` (or any reachable Postgres instance) plus a
+plain Python virtualenv is the full local dependency set on any OS.
+
 API docs: http://localhost:8000/api/docs (disabled in production).
 
 ### Frontend
 
-Static files — serve with any static server, e.g.:
+Plain HTML5/CSS3/Bootstrap 5/vanilla JavaScript — no npm/Vite/build step
+exists or is required. Serve the static files with any static server:
 
 ```bash
 cd frontend
-python3 -m http.server 5173
+python3 -m http.server 5173      # macOS/Linux
+py -m http.server 5173           # Windows
 ```
 
 Open http://localhost:5173. The frontend calls the backend at
@@ -332,7 +508,7 @@ cd backend
 .venv/bin/pytest tests/ -v
 ```
 
-151 tests covering signup, duplicate-email/weak-password/mismatch
+211 tests covering signup, duplicate-email/weak-password/mismatch
 rejection, email verification (incl. single-use/expiry), login (incl.
 unverified-account block, wrong password, account lockout), logout,
 logout-all, per-session revocation, forgot/reset password (incl.
@@ -365,14 +541,81 @@ real docx/pdf rendering, including empty-content edge cases; and the
 `/api/documents/*` endpoints' honest not-configured path, a fake-provider
 success path verified for all three formats — markdown, real .docx
 zip/PDF magic bytes — download content-type/filename correctness,
-cross-user ownership isolation, and `document` History logging) — all
+cross-user ownership isolation, and `document` History logging), the AI
+provider architecture (`resolved_ai_runtime_mode`/`resolved_ai_provider`
+mode-derivation logic, Ollama's not-configured and — a real network call
+against an intentionally-unreachable local port — unreachable-server
+paths, Gemini's not-configured path, an unknown-provider-name fallback),
+the five generation provider families (real local audio synthesis via
+`espeak-ng` producing an actual playable WAV, and the honest
+"unavailable"/not-configured contract for transcription/image/video/
+voice — including voice cloning's consent-required check), the
+DeploymentProvider (`LocalDeploymentProvider` producing a real, openable
+zip archive; Netlify/Vercel's honest not-configured paths), the
+generation job queue (`POST /api/jobs/audio` exercising the complete
+real Frontend→Job→Queue→Worker→Provider→Storage→Completed pipeline
+against a real local TTS backend — no mocking — plus download,
+cancellation, the 409 "already terminal" contract, per-user concurrency
+limits, cross-user isolation, History logging, and a fake-provider test
+proving a job that fails lands on `failed` with a real error rather than
+fabricating success), and the system Capability/Health APIs
+(`/api/system/capabilities` reporting all ten categories with real
+status, `/api/system/providers/health` covering database/AI
+provider/Obsidian/storage/job-queue, and a regression test proving
+neither endpoint ever leaks a configured secret into its response) — all
 against a real PostgreSQL test database and a real (temp-directory)
 filesystem vault/storage root, no mocked ORM and no mocked filesystem.
 
-There is deliberately no test that calls a real Anthropic API: this
-deployment has no `ANTHROPIC_API_KEY` configured (see "Configuring a
-real Claude connection" above), and the honest "not configured" path
-is exactly what's under test.
+There is deliberately no test that calls a real Anthropic, Gemini, or
+Ollama API over the network: this deployment's test environment pins
+`AI_PROVIDER=anthropic` with no `ANTHROPIC_API_KEY` configured (see
+"Configuring an AI provider" above), and the honest "not configured"
+path is exactly what's under test — except for the one real Ollama
+reachability check, which deliberately targets `localhost:11434` (no
+server there in CI) to prove the "provider unreachable" failure path is
+genuine, not mocked.
+
+## Production deployment
+
+The target production architecture is:
+
+```
+Frontend hosting (static: Bootstrap/vanilla JS — any CDN/static host)
+  +
+FastAPI backend (this repo's backend/, run under a real ASGI server —
+  e.g. uvicorn behind a reverse proxy, or gunicorn+uvicorn workers)
+  +
+PostgreSQL (managed or self-hosted; DATABASE_URL points at it)
+  +
+Object storage (S3-compatible — swap StorageProvider's implementation;
+  LocalStorageProvider also works in production for a single-instance
+  deployment, it's just not horizontally scalable across machines)
+  +
+Job queue (swap JobQueue's implementation for a Celery/RQ/Dramatiq-backed
+  one once real Image/Video generation needs true multi-process/multi-
+  machine workers; InProcessJobQueue is genuinely fine for a single-
+  instance deployment's current job types)
+  +
+Workers (optionally GPU-backed, once local Image/Video/Voice generation
+  backends are configured)
+  +
+External AI providers (Anthropic/Gemini in production mode, or a
+  self-hosted Ollama server reachable from the backend)
+```
+
+This is deliberately **not** designed around one developer's machine —
+every provider category is swappable via environment configuration
+(see **Runtime modes** above), and nothing assumes XAMPP, a Windows-only
+toolchain, or a single always-on developer laptop. `docker-compose.yml`
+in this repo provisions Postgres for local development only; a real
+deployment supplies its own managed Postgres, object storage, and
+(eventually) queue infrastructure via `DATABASE_URL`, `STORAGE_*`, and
+`JOB_QUEUE*` environment variables — `.env.production.example` is the
+starting point. No application code changes are required to move from
+the local single-file-server setup to this architecture; only
+configuration and (for object storage / a real queue) new
+`StorageProvider`/`JobQueue` implementations behind the existing
+interfaces.
 
 ## Roadmap
 
@@ -381,12 +624,12 @@ This repo follows the phased plan from the product spec:
 1. ✅ **Foundation** — repo structure, backend/frontend skeleton, Postgres, env config
 2. ✅ **Authentication** — signup/login/verify/reset/sessions/profile
 3. ✅ **Core UI** — reusable full-screen/split-screen workspace shell, history, projects UI
-4. ✅ **AI Agent** — Claude provider, orchestrator, chat, streaming, 7 modes (tool-calling architecture still to come)
-5. ✅ **Obsidian** — per-user vault, search/read/create/update/append/move/delete, connection status, Knowledge/Research mode grounding (MCP/REST bridge to a live Obsidian.app instance is a possible future provider — the current one operates directly on vault files, which is what a live Obsidian instance is backed by anyway)
-6. ✅ **Knowledge Intelligence** — gap/duplicate/outdated/broken-link/orphan detection, health score, knowledge graph, Claude-backed gap analysis, knowledge-update history, auto-update policy setting (Auto/Approval/Smart Auto — saved now, ready for the future automatic-apply capability)
-7. 🟡 **Creative tools** — image/audio/video/document/design generation. **Document generation is done**: Claude-drafted content rendered to real Markdown/.docx/.pdf via `StorageProvider`, gated honestly by Claude configuration (see above). The new `StorageProvider` abstraction this introduced is what Image/Audio/Video generation will write through next. Image/Audio/Video/Website/3D Website/Poster/Logo/Graphic Design generation remain ⬜ — each needs its own real external generation API (OpenAI Images, Stability AI, ElevenLabs, etc.), architected the same way Claude is: a provider interface + factory, built and ready to configure, honestly "not configured" until real credentials are added.
-8. ⬜ **Developer Studio** — website/3D website generation, live preview, deployment
-9. ⬜ **Integration** — projects ↔ knowledge ↔ history ↔ files ↔ AI context ↔ activity log
+4. ✅ **AI Agent** — AI provider architecture (Ollama/Anthropic/Gemini, mode-aware factory), orchestrator, chat, streaming, 7 modes (tool-calling architecture still to come)
+5. ✅ **Obsidian** — per-user vault (never a shared/global one), search/read/create/update/append/move/delete/get_metadata, connection status, Knowledge/Research mode grounding (MCP/REST bridge to a live Obsidian.app instance is a possible future provider — the current one operates directly on vault files, which is what a live Obsidian instance is backed by anyway)
+6. ✅ **Knowledge Intelligence** — gap/duplicate/outdated/broken-link/orphan detection, health score, knowledge graph, AI-backed gap analysis, knowledge-update history, auto-update policy setting (Auto/Approval/Smart Auto — saved now, ready for the future automatic-apply capability)
+7. 🟡 **Creative tools** — image/audio/video/document/design generation. **Document generation is done**: AI-drafted content rendered to real Markdown/.docx/.pdf via `StorageProvider`, gated honestly by AI provider configuration. **Local audio (TTS) generation is done**: real `espeak-ng`-backed synthesis through the new job queue (`POST /api/jobs/audio`). Full provider architecture (interface + local/cloud factory + honest capability detection) exists for all five generation categories (Audio/Transcription/Image/Video/Voice) plus Deployment — Transcription/Image/Video/Voice cloning remain ⬜ for actual generation (each needs a real backend/GPU/model or a real external vendor integration), but report exactly why via `GET /api/system/capabilities` rather than pretending to work. Website/3D Website/Poster/Logo/Graphic Design generation itself remain ⬜.
+8. 🟡 **Developer Studio** — website/3D website generation, live preview, deployment. **Deployment architecture is done**: `DeploymentProvider` (`LocalDeploymentProvider` — real zip packaging, no credentials — plus Netlify/Vercel architecture points) is ready for website generation to use once built; website generation itself remains ⬜.
+9. 🟡 **Integration** — projects ↔ knowledge ↔ history ↔ files ↔ AI context ↔ activity log. **Production-readiness architecture landed this phase**: local/production runtime-mode switching (`AI_RUNTIME_MODE`), a real generation job queue (`GenerationJob` + `JobQueue` + `InProcessJobQueue`, Celery/RQ-swappable), the Capability API (`GET /api/system/capabilities`) and Health API (`GET /health`, `GET /api/system/providers/health`), a System Status frontend page + Settings tabs, and technical rate-limiting/concurrency/upload-size protection (no user-visible credit system). Remaining integration work: wiring future Image/Video generation through the job queue, and a persistent-broker `JobQueue` implementation for true multi-worker production scaling.
 10. ⬜ **Testing** — expanded integration/E2E/security test coverage
 11. ⬜ **Final polish** — performance, accessibility, full responsive/theme QA
 

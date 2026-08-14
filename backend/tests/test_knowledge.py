@@ -129,6 +129,16 @@ class TestVaultAnalysis:
         analysis = analyze_vault(vault)
         assert analysis.note_count == 1
 
+    def test_get_metadata_returns_real_note_metadata_without_content(self, vault):
+        vault.create_note("01-Knowledge/Tagged.md", "# Tagged\n#important See [[Other]].")
+        meta = vault.get_metadata("01-Knowledge/Tagged.md")
+        assert meta.title == "Tagged"
+        assert meta.tags == ["important"]
+        assert meta.links == ["Other"]
+        assert meta.size_bytes > 0
+        assert meta.created_at is not None
+        assert meta.updated_at is not None
+
 
 # ---------------------------------------------------------------------------
 # Knowledge API

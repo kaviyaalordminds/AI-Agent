@@ -16,6 +16,7 @@ from app.integrations.claude.base import ClaudeProvider
 from app.integrations.claude.errors import ProviderRequestError
 from app.integrations.claude.utils import complete
 from app.integrations.storage.base import StorageProvider
+from app.integrations.storage.errors import StorageError
 from app.models.document import Document, DocumentFormat, DocumentStatus
 from app.models.history import HistoryEntry, HistoryEntryStatus, HistoryEntryType
 from app.models.project import Project
@@ -101,7 +102,10 @@ async def generate_document(
         extension = "md"
 
     filename = f"{uuid.uuid4()}.{extension}"
-    stored = storage_provider.write("documents", str(user.id), filename, file_bytes)
+    try:
+        stored = storage_provider.write("documents", str(user.id), filename, file_bytes)
+    except StorageError as exc:
+        return _record_failed_document(db, user, project, prompt, doc_format, str(exc))
 
     document = Document(
         user_id=user.id,

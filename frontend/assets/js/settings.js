@@ -100,6 +100,39 @@ async function init() {
   initAiTab(settings);
   initClaudeTab();
   initObsidianTab();
+  initStorageTab();
+  initSystemStatusTab();
+}
+
+async function loadStorageStatus() {
+  const statusEl = document.getElementById("storage-settings-status");
+  const detailEl = document.getElementById("storage-settings-detail");
+  statusEl.innerHTML = `<span class="dot dot-muted"></span><span style="font-size:0.9rem;">Checking…</span>`;
+  try {
+    const capabilities = await window.AIAgentApi.get("/system/capabilities");
+    const storage = capabilities.storage;
+    statusEl.innerHTML = storage.available
+      ? `<span class="dot dot-success"></span><span style="font-size:0.9rem;">Available — ${storage.provider}</span>`
+      : `<span class="dot dot-danger"></span><span style="font-size:0.9rem;">Unavailable</span>`;
+    detailEl.textContent = storage.reason;
+  } catch (err) {
+    statusEl.innerHTML = `<span class="dot dot-danger"></span><span style="font-size:0.9rem;">Could not check status</span>`;
+    detailEl.textContent = err.message;
+  }
+}
+
+function initStorageTab() {
+  loadStorageStatus();
+}
+
+let systemStatusTabLoaded = false;
+
+function initSystemStatusTab() {
+  document.querySelector('[data-settings-tab="system-status"]').addEventListener("click", () => {
+    if (systemStatusTabLoaded) return;
+    systemStatusTabLoaded = true;
+    window.SystemStatus.loadSystemStatus("settings-capability-grid", "settings-health-list");
+  });
 }
 
 function initAiTab(settings) {

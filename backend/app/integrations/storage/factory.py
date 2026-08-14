@@ -13,6 +13,8 @@ def get_storage_provider() -> StorageProvider:
     settings = get_settings()
 
     if settings.storage_provider == "local":
-        return LocalStorageProvider(Path(settings.storage_root))
+        return LocalStorageProvider(
+            Path(settings.storage_root), max_file_size_bytes=settings.max_upload_file_size_mb * 1024 * 1024
+        )
 
     raise ValueError(f"Unknown STORAGE_PROVIDER '{settings.storage_provider}'.")

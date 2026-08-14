@@ -13,6 +13,7 @@ from pydantic import EmailStr, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 Environment = Literal["development", "testing", "staging", "production"]
+AIRuntimeMode = Literal["local", "production"]
 
 
 class Settings(BaseSettings):
@@ -46,11 +47,31 @@ class Settings(BaseSettings):
     rate_limit_window_minutes: int = 15
     rate_limit_max_requests: int = 10
 
-    # --- Claude provider ---
+    # --- AI runtime mode ---
+    # "local": prefer providers that need no cloud credentials (Ollama).
+    # "production": prefer configured cloud providers. If unset, derived
+    # from app_env (development/testing -> local, staging/production ->
+    # production) by `resolved_ai_runtime_mode` below — so a bare
+    # `APP_ENV=production` alone already does the right thing.
+    ai_runtime_mode: AIRuntimeMode | None = None
+    # Explicit provider override. If unset, derived from
+    # resolved_ai_runtime_mode ("local" -> ollama, "production" -> anthropic).
+    ai_provider: Literal["ollama", "anthropic", "gemini"] | None = None
+
+    # --- Claude provider (kept for backward compatibility; get_claude_provider()
+    # now dispatches on ai_provider/ai_runtime_mode, see app/integrations/claude/factory.py) ---
     claude_provider: Literal["anthropic"] = "anthropic"
     anthropic_api_key: str | None = None
     claude_model: str = "claude-sonnet-5"
     claude_max_output_tokens: int = 4096
+
+    # --- Ollama provider (local mode default AI provider; no API key needed) ---
+    ollama_base_url: str = "http://localhost:11434"
+    ollama_model: str = ""  # must be set explicitly — no default model is assumed installed
+
+    # --- Gemini provider (production-mode cloud alternative to Anthropic) ---
+    google_api_key: str | None = None
+    gemini_model: str = "gemini-2.0-flash"
 
     # --- Storage provider ---
     storage_provider: Literal["local"] = "local"
@@ -58,14 +79,51 @@ class Settings(BaseSettings):
     # under, namespaced by category then user id. Relative paths are
     # resolved against the backend process's working directory.
     storage_root: str = "../storage"
+    max_upload_file_size_mb: int = 25
 
-    # --- Obsidian provider ---
+    # --- Obsidian / Knowledge provider ---
+    # `knowledge_provider` is the general-purpose name the platform
+    # architecture exposes (capability API, docs); Obsidian is currently
+    # the only implementation, so it drives obsidian_provider/
+    # obsidian_vault_root directly. Each user gets their own vault under
+    # {obsidian_vault_root}/{user_id}/ (see app/integrations/obsidian/factory.py)
+    # — never one shared/global vault.
+    knowledge_provider: Literal["obsidian"] = "obsidian"
     obsidian_provider: Literal["local_vault"] = "local_vault"
     # Root directory containing one vault subdirectory per user
     # ({obsidian_vault_root}/{user_id}/). Relative paths are resolved
     # against the backend process's working directory. Point this at a
     # real synced Obsidian vault location in production.
     obsidian_vault_root: str = "../storage/obsidian_vaults"
+
+    # --- Audio / Transcription / Image / Video / Voice providers ---
+    # These are architected (interface + factory + honest capability
+    # detection) but only "local" has a real implementation attempt in
+    # this deployment; "cloud" is a configuration point for a future
+    # vendor integration. See app/integrations/{audio,transcription,image,
+    # video,voice}/ and GET /api/system/capabilities.
+    tts_provider: Literal["local", "cloud"] = "local"
+    transcription_provider: Literal["local", "cloud"] = "local"
+    image_provider: Literal["local", "cloud"] = "local"
+    video_provider: Literal["local", "cloud"] = "local"
+    voice_provider: Literal["local", "cloud"] = "local"
+
+    # --- Deployment provider ---
+    deployment_provider: Literal["local", "netlify", "vercel"] = "local"
+    netlify_api_token: str | None = None
+    vercel_api_token: str | None = None
+
+    # --- Generation jobs / abuse protection (technical limits, not user credits) ---
+    generation_rate_limit_max_requests: int = 20
+    generation_rate_limit_window_minutes: int = 15
+    generation_max_concurrent_jobs_per_user: int = 3
+    generation_max_job_duration_seconds: int = 600
+    # In-process worker pool size for JobQueue=in_process (local/dev default).
+    # A production deployment swaps JOB_QUEUE=in_process for a Celery/RQ-
+    # backed JobQueue implementation without changing job-creation call
+    # sites — see app/jobs/queue.py.
+    job_queue: Literal["in_process"] = "in_process"
+    job_queue_max_workers: int = 4
 
     # --- Email provider ---
     email_provider: Literal["console", "smtp"] = "console"
@@ -88,6 +146,18 @@ class Settings(BaseSettings):
     @property
     def is_production(self) -> bool:
         return self.app_env == "production"
+
+    @property
+    def resolved_ai_runtime_mode(self) -> AIRuntimeMode:
+        if self.ai_runtime_mode is not None:
+            return self.ai_runtime_mode
+        return "production" if self.app_env in ("staging", "production") else "local"
+
+    @property
+    def resolved_ai_provider(self) -> Literal["ollama", "anthropic", "gemini"]:
+        if self.ai_provider is not None:
+            return self.ai_provider
+        return "ollama" if self.resolved_ai_runtime_mode == "local" else "anthropic"
 
 
 @lru_cache

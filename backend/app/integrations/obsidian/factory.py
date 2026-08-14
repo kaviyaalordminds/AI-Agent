@@ -20,3 +20,9 @@ def get_obsidian_provider(user_id: uuid.UUID) -> ObsidianProvider:
     if not root.exists():
         provision_vault(root)
     return LocalVaultProvider(root)
+
+
+# General-purpose alias: KNOWLEDGE_PROVIDER=obsidian is the only backend
+# today, so "the knowledge provider" and "the obsidian provider" are the
+# same object per-user — see ObsidianProvider's docstring in base.py.
+get_knowledge_provider = get_obsidian_provider

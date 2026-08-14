@@ -3,7 +3,7 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 
-from app.integrations.obsidian.base import NoteDetail, NoteSummary, ObsidianProvider, VaultStatus
+from app.integrations.obsidian.base import NoteDetail, NoteMetadata, NoteSummary, ObsidianProvider, VaultStatus
 from app.integrations.obsidian.errors import InvalidNotePathError, NoteAlreadyExistsError, NoteNotFoundError
 from app.integrations.obsidian.parsing import derive_excerpt, derive_title, extract_links, extract_tags
 
@@ -239,3 +239,18 @@ class LocalVaultProvider(ObsidianProvider):
         dst.parent.mkdir(parents=True, exist_ok=True)
         src.rename(dst)
         return self._to_detail(dst)
+
+    def get_metadata(self, path: str) -> NoteMetadata:
+        file_path = self._resolve(path, must_exist=True)
+        summary = self._to_summary(file_path)
+        stat = file_path.stat()
+        return NoteMetadata(
+            path=summary.path,
+            title=summary.title,
+            folder=summary.folder,
+            tags=summary.tags,
+            links=summary.links,
+            created_at=datetime.fromtimestamp(stat.st_ctime, tz=timezone.utc),
+            updated_at=summary.updated_at,
+            size_bytes=summary.size_bytes,
+        )

@@ -1,8 +1,9 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.database.session import get_db
 from app.documents.generator import generate_document, record_unavailable_document
 from app.integrations.claude.errors import ProviderNotConfiguredError
@@ -12,6 +13,7 @@ from app.models.document import Document, DocumentFormat
 from app.models.project import Project
 from app.models.user import User
 from app.schemas.document import CreateDocumentRequest, DocumentOut
+from app.security.rate_limit import enforce_rate_limit
 from app.security.sessions import get_current_user, require_csrf
 
 router = APIRouter(prefix="/documents", tags=["documents"])
@@ -60,10 +62,14 @@ def get_document(document_id: uuid.UUID, user: User = Depends(get_current_user),
 @router.post("", response_model=DocumentOut, status_code=status.HTTP_201_CREATED)
 async def create_document(
     payload: CreateDocumentRequest,
+    request: Request,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     _csrf: None = Depends(require_csrf),
 ):
+    settings = get_settings()
+    enforce_rate_limit(request, "generation", settings.generation_rate_limit_max_requests)
+
     project = None
     if payload.project_id is not None:
         project = db.query(Project).filter(Project.id == payload.project_id, Project.user_id == user.id).first()

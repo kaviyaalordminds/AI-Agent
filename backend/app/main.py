@@ -10,9 +10,11 @@ from app.api.agent.router import router as agent_router
 from app.api.auth.router import router as auth_router
 from app.api.documents.router import router as documents_router
 from app.api.history.router import router as history_router
+from app.api.jobs.router import router as jobs_router
 from app.api.knowledge.router import router as knowledge_router
 from app.api.obsidian.router import router as obsidian_router
 from app.api.projects.router import router as projects_router
+from app.api.system.router import router as system_router
 from app.api.users.router import router as users_router
 from app.core.config import get_settings
 from app.core.logging import configure_logging
@@ -67,8 +69,19 @@ app.include_router(agent_router, prefix=settings.api_prefix)
 app.include_router(obsidian_router, prefix=settings.api_prefix)
 app.include_router(knowledge_router, prefix=settings.api_prefix)
 app.include_router(documents_router, prefix=settings.api_prefix)
+app.include_router(jobs_router, prefix=settings.api_prefix)
+app.include_router(system_router, prefix=settings.api_prefix)
 
 
 @app.get(f"{settings.api_prefix}/health")
 def health_check():
     return {"status": "ok", "environment": settings.app_env}
+
+
+@app.get("/health")
+def bare_health_check():
+    """Unprefixed liveness endpoint for load balancers/orchestrators that
+    probe a fixed /health path — deliberately trivial (no DB/provider
+    calls) so it reflects only "is the process up", not deeper provider
+    status (see /api/system/providers/health for that)."""
+    return {"status": "ok"}
