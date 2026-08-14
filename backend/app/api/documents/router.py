@@ -25,6 +25,14 @@ _CONTENT_TYPES = {
         "docx",
     ),
     DocumentFormat.pdf: ("application/pdf", "pdf"),
+    DocumentFormat.pptx: (
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "pptx",
+    ),
+    DocumentFormat.xlsx: (
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "xlsx",
+    ),
 }
 
 

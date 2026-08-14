@@ -71,7 +71,12 @@ async def _run_image_job(job: GenerationJob, storage) -> dict:
 async def _run_video_job(job: GenerationJob, storage) -> dict:
     provider = get_video_provider()
     meta = job.input_metadata
-    result = await provider.generate(meta["prompt"], duration_seconds=meta.get("duration_seconds", 4.0))
+    reference_image = None
+    if meta.get("reference_image_ref"):
+        reference_image = storage.read(meta["reference_image_ref"])
+    result = await provider.generate(
+        meta["prompt"], duration_seconds=meta.get("duration_seconds", 4.0), reference_image=reference_image
+    )
     stored = storage.write("generated_videos", str(job.user_id), f"{job.id}.{result.format}", result.data)
     return {"storage_ref": stored.ref, "content_type": result.content_type, "size_bytes": stored.size_bytes}
 

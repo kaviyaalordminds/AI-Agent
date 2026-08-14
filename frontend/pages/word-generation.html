@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Word Document Generation · AI Agent Platform</title>
+<script>
+  (function () {
+    var theme = localStorage.getItem("aiagent:theme") || "dark";
+    document.documentElement.setAttribute("data-theme", theme);
+  })();
+</script>
+<link rel="icon" type="image/svg+xml" href="../assets/images/favicon.svg">
+<link rel="stylesheet" href="../assets/vendor/bootstrap/css/bootstrap.min.css">
+<link rel="stylesheet" href="../assets/vendor/bootstrap-icons/bootstrap-icons.min.css">
+<link rel="stylesheet" href="../assets/css/theme.css">
+<link rel="stylesheet" href="../assets/css/app.css">
+<link rel="stylesheet" href="../assets/css/agent.css">
+<link rel="stylesheet" href="../assets/css/documents.css">
+<link rel="stylesheet" href="../assets/css/media-generation.css">
+</head>
+<body>
+
+<div class="app-shell">
+  <aside class="app-sidebar" id="app-sidebar"></aside>
+
+  <div class="app-main">
+    <header class="app-topbar">
+      <div class="d-flex align-items-center gap-3">
+        <button type="button" class="sidebar-collapse-btn d-md-none" id="mobile-sidebar-toggle"><i class="bi bi-list"></i></button>
+        <h5 class="mb-0">Word Document Generation</h5>
+      </div>
+      <div class="d-flex align-items-center gap-3">
+        <div class="theme-toggle" data-theme-toggle>
+          <button type="button" data-theme-value="light" title="Light theme"><i class="bi bi-sun"></i></button>
+          <button type="button" data-theme-value="dark" title="Dark theme"><i class="bi bi-moon-stars"></i></button>
+        </div>
+        <div class="user-menu-trigger" onclick="window.location.href='profile.html'">
+          <div class="avatar-circle" id="topbar-user-avatar">--</div>
+          <div class="d-none d-sm-block">
+            <div style="font-size:0.85rem; font-weight:600;" id="topbar-user-name">Loading…</div>
+            <div style="font-size:0.72rem; color:var(--text-muted);" id="topbar-user-email"></div>
+          </div>
+        </div>
+        <button type="button" class="btn-ghost" id="topbar-logout-btn" title="Log out"><i class="bi bi-box-arrow-right"></i></button>
+      </div>
+    </header>
+
+    <main class="app-content">
+      <div class="gen-columns">
+        <div>
+          <div class="surface p-4 gen-form">
+            <h6 class="mb-3">Document details</h6>
+            <label class="field-label" for="word-title">Title</label>
+            <input type="text" class="form-control-premium" id="word-title" placeholder="e.g. Quarterly Business Report">
+            <div class="field-error" data-error-for="title"></div>
+
+            <label class="field-label mt-3" for="word-author">Author <span style="font-weight:400; color:var(--text-muted);">(optional)</span></label>
+            <input type="text" class="form-control-premium" id="word-author" placeholder="Your name">
+
+            <div class="mb-3 mt-3">
+              <label class="field-label" for="word-project">Project <span style="font-weight:400; color:var(--text-muted);">(optional)</span></label>
+              <select class="form-control-premium" id="word-project">
+                <option value="">No project</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="surface p-4 mt-3">
+            <div class="d-flex align-items-center justify-content-between mb-3">
+              <h6 class="mb-0">Content</h6>
+              <span class="field-error" data-error-for="blocks" style="margin:0;"></span>
+            </div>
+            <div id="word-blocks"></div>
+            <div class="add-block-bar">
+              <button type="button" class="btn-ghost" data-add-block="heading"><i class="bi bi-type-h1"></i> Heading</button>
+              <button type="button" class="btn-ghost" data-add-block="paragraph"><i class="bi bi-text-paragraph"></i> Paragraph</button>
+              <button type="button" class="btn-ghost" data-add-block="bullet_list"><i class="bi bi-list-ul"></i> Bullet list</button>
+              <button type="button" class="btn-ghost" data-add-block="numbered_list"><i class="bi bi-list-ol"></i> Numbered list</button>
+              <button type="button" class="btn-ghost" data-add-block="table"><i class="bi bi-table"></i> Table</button>
+            </div>
+          </div>
+
+          <button type="button" class="btn-brand mt-3" id="word-generate-btn"><i class="bi bi-file-earmark-word"></i> Generate Word document</button>
+
+          <div class="surface p-4 mt-4" id="word-result-panel" style="display:none;">
+            <div class="d-flex align-items-center justify-content-between mb-3">
+              <h6 class="mb-0" id="word-result-title">Document</h6>
+              <span id="word-result-status"></span>
+            </div>
+            <div id="word-result-body"></div>
+          </div>
+        </div>
+
+        <div class="surface p-4">
+          <h6 class="mb-3">Generated Word documents</h6>
+          <div id="word-list">
+            <div class="skeleton mb-2" style="height:56px; border-radius:10px;"></div>
+            <div class="skeleton" style="height:56px; border-radius:10px;"></div>
+          </div>
+          <div id="word-list-empty" class="empty-state d-none" style="padding:1.5rem 0.5rem;">
+            <div class="empty-icon"><i class="bi bi-file-earmark-word"></i></div>
+            <h6>No Word documents yet</h6>
+            <p style="font-size:0.82rem;">Documents you generate will be listed here for download.</p>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script src="../assets/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
+<script src="../assets/js/config.js"></script>
+<script src="../assets/js/api.js"></script>
+<script src="../assets/js/theme.js"></script>
+<script src="../assets/js/toast.js"></script>
+<script src="../assets/js/nav.js"></script>
+<script src="../assets/js/modals.js"></script>
+<script src="../assets/js/generation-common.js"></script>
+<script src="../assets/js/word-generation.js"></script>
+</body>
+</html>

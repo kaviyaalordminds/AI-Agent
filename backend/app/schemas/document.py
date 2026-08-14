@@ -6,6 +6,9 @@ from pydantic import BaseModel, Field, field_validator
 from app.models.document import DocumentFormat, DocumentStatus
 
 
+_AI_DRAFTED_FORMATS = {DocumentFormat.markdown, DocumentFormat.docx, DocumentFormat.pdf}
+
+
 class CreateDocumentRequest(BaseModel):
     prompt: str = Field(min_length=3, max_length=2000)
     format: DocumentFormat = DocumentFormat.markdown
@@ -17,6 +20,16 @@ class CreateDocumentRequest(BaseModel):
         v = v.strip()
         if len(v) < 3:
             raise ValueError("Describe the document you want in a bit more detail.")
+        return v
+
+    @field_validator("format")
+    @classmethod
+    def _validate_format(cls, v: DocumentFormat) -> DocumentFormat:
+        if v not in _AI_DRAFTED_FORMATS:
+            raise ValueError(
+                f"Format '{v.value}' is not AI-drafted from a prompt. "
+                "Use POST /api/generation/document/word, /ppt, or /excel with structured content instead."
+            )
         return v
 
 

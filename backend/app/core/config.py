@@ -73,6 +73,15 @@ class Settings(BaseSettings):
     google_api_key: str | None = None
     gemini_model: str = "gemini-2.0-flash"
 
+    # --- Gemini media generation (image/video) ---
+    # A separate key name since Google issues API keys per-project and a
+    # deployment may reasonably want to scope media generation separately
+    # from text; GEMINI_API_KEY falls back to GOOGLE_API_KEY (see
+    # resolved_gemini_api_key below) so setting only one is also fine.
+    gemini_api_key: str | None = None
+    gemini_image_model: str = "imagen-3.0-generate-002"
+    gemini_video_model: str = "veo-2.0-generate-001"
+
     # --- Storage provider ---
     storage_provider: Literal["local"] = "local"
     # Root directory generated assets (documents, images, etc.) are written
@@ -158,6 +167,10 @@ class Settings(BaseSettings):
         if self.ai_provider is not None:
             return self.ai_provider
         return "ollama" if self.resolved_ai_runtime_mode == "local" else "anthropic"
+
+    @property
+    def resolved_gemini_api_key(self) -> str | None:
+        return self.gemini_api_key or self.google_api_key
 
 
 @lru_cache

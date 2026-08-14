@@ -19,8 +19,12 @@ class VideoProvider(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def generate(self, prompt: str, duration_seconds: float = 4.0) -> GeneratedVideo:
-        """Raise GenerationProviderNotConfiguredError if unavailable, or
+    async def generate(
+        self, prompt: str, duration_seconds: float = 4.0, reference_image: bytes | None = None
+    ) -> GeneratedVideo:
+        """`reference_image` enables image-to-video for providers that
+        support it (ignored by providers that don't). Raise
+        GenerationProviderNotConfiguredError if unavailable, or
         GenerationProviderRequestError if generation itself fails. Video
         generation is resource-intensive — do not assume one machine can
         handle unlimited concurrent jobs (see GenerationJob queue)."""

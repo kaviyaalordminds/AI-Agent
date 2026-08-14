@@ -94,13 +94,13 @@ class TestAudioJobEndToEnd:
         before it ever runs) must not offer a download."""
         client, csrf = auth_client
         # Force the queue to no-op so the job stays queued long enough to cancel.
-        import app.api.jobs.router as jobs_router_module
+        import app.jobs.service as jobs_service_module
 
         class _NoopQueue:
             def submit(self, job_id):
                 pass
 
-        monkeypatch.setattr(jobs_router_module, "get_job_queue", lambda: _NoopQueue())
+        monkeypatch.setattr(jobs_service_module, "get_job_queue", lambda: _NoopQueue())
 
         resp = client.post(
             "/api/jobs/audio", json={"text": "Never actually runs."}, headers={"X-CSRF-Token": csrf}
@@ -113,13 +113,13 @@ class TestAudioJobEndToEnd:
 
     def test_cancel_queued_job(self, auth_client, monkeypatch):
         client, csrf = auth_client
-        import app.api.jobs.router as jobs_router_module
+        import app.jobs.service as jobs_service_module
 
         class _NoopQueue:
             def submit(self, job_id):
                 pass
 
-        monkeypatch.setattr(jobs_router_module, "get_job_queue", lambda: _NoopQueue())
+        monkeypatch.setattr(jobs_service_module, "get_job_queue", lambda: _NoopQueue())
 
         resp = client.post(
             "/api/jobs/audio", json={"text": "Cancel me before I run."}, headers={"X-CSRF-Token": csrf}
@@ -132,13 +132,13 @@ class TestAudioJobEndToEnd:
 
     def test_cancel_requires_csrf(self, auth_client, monkeypatch):
         client, _csrf = auth_client
-        import app.api.jobs.router as jobs_router_module
+        import app.jobs.service as jobs_service_module
 
         class _NoopQueue:
             def submit(self, job_id):
                 pass
 
-        monkeypatch.setattr(jobs_router_module, "get_job_queue", lambda: _NoopQueue())
+        monkeypatch.setattr(jobs_service_module, "get_job_queue", lambda: _NoopQueue())
         resp = client.post(
             "/api/jobs/audio", json={"text": "CSRF check."}, headers={"X-CSRF-Token": _csrf}
         )
@@ -160,7 +160,7 @@ class TestAudioJobEndToEnd:
 
     def test_concurrent_job_limit_enforced(self, auth_client, monkeypatch):
         client, csrf = auth_client
-        import app.api.jobs.router as jobs_router_module
+        import app.jobs.service as jobs_service_module
         from app.core.config import get_settings
 
         settings = get_settings()
@@ -170,7 +170,7 @@ class TestAudioJobEndToEnd:
             def submit(self, job_id):
                 pass  # jobs stay "queued" forever, so they count toward the limit
 
-        monkeypatch.setattr(jobs_router_module, "get_job_queue", lambda: _NoopQueue())
+        monkeypatch.setattr(jobs_service_module, "get_job_queue", lambda: _NoopQueue())
 
         for _ in range(2):
             resp = client.post(

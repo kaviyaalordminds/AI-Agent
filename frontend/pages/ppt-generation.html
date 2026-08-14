@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Presentation Generation · AI Agent Platform</title>
+<script>
+  (function () {
+    var theme = localStorage.getItem("aiagent:theme") || "dark";
+    document.documentElement.setAttribute("data-theme", theme);
+  })();
+</script>
+<link rel="icon" type="image/svg+xml" href="../assets/images/favicon.svg">
+<link rel="stylesheet" href="../assets/vendor/bootstrap/css/bootstrap.min.css">
+<link rel="stylesheet" href="../assets/vendor/bootstrap-icons/bootstrap-icons.min.css">
+<link rel="stylesheet" href="../assets/css/theme.css">
+<link rel="stylesheet" href="../assets/css/app.css">
+<link rel="stylesheet" href="../assets/css/agent.css">
+<link rel="stylesheet" href="../assets/css/documents.css">
+<link rel="stylesheet" href="../assets/css/media-generation.css">
+</head>
+<body>
+
+<div class="app-shell">
+  <aside class="app-sidebar" id="app-sidebar"></aside>
+
+  <div class="app-main">
+    <header class="app-topbar">
+      <div class="d-flex align-items-center gap-3">
+        <button type="button" class="sidebar-collapse-btn d-md-none" id="mobile-sidebar-toggle"><i class="bi bi-list"></i></button>
+        <h5 class="mb-0">Presentation Generation</h5>
+      </div>
+      <div class="d-flex align-items-center gap-3">
+        <div class="theme-toggle" data-theme-toggle>
+          <button type="button" data-theme-value="light" title="Light theme"><i class="bi bi-sun"></i></button>
+          <button type="button" data-theme-value="dark" title="Dark theme"><i class="bi bi-moon-stars"></i></button>
+        </div>
+        <div class="user-menu-trigger" onclick="window.location.href='profile.html'">
+          <div class="avatar-circle" id="topbar-user-avatar">--</div>
+          <div class="d-none d-sm-block">
+            <div style="font-size:0.85rem; font-weight:600;" id="topbar-user-name">Loading…</div>
+            <div style="font-size:0.72rem; color:var(--text-muted);" id="topbar-user-email"></div>
+          </div>
+        </div>
+        <button type="button" class="btn-ghost" id="topbar-logout-btn" title="Log out"><i class="bi bi-box-arrow-right"></i></button>
+      </div>
+    </header>
+
+    <main class="app-content">
+      <div class="gen-columns">
+        <div>
+          <div class="surface p-4 gen-form">
+            <h6 class="mb-3">Presentation details</h6>
+            <label class="field-label" for="ppt-title">Title</label>
+            <input type="text" class="form-control-premium" id="ppt-title" placeholder="e.g. Product Launch Deck">
+            <div class="field-error" data-error-for="title"></div>
+
+            <label class="field-label mt-3" for="ppt-subtitle">Subtitle <span style="font-weight:400; color:var(--text-muted);">(optional)</span></label>
+            <input type="text" class="form-control-premium" id="ppt-subtitle" placeholder="e.g. Q3 2026">
+
+            <div class="mb-3 mt-3">
+              <label class="field-label" for="ppt-project">Project <span style="font-weight:400; color:var(--text-muted);">(optional)</span></label>
+              <select class="form-control-premium" id="ppt-project">
+                <option value="">No project</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="surface p-4 mt-3">
+            <div class="d-flex align-items-center justify-content-between mb-3">
+              <h6 class="mb-0">Slides</h6>
+              <span class="field-error" data-error-for="slides" style="margin:0;"></span>
+            </div>
+            <div id="ppt-slides"></div>
+            <div class="add-slide-bar">
+              <button type="button" class="btn-ghost" id="ppt-add-slide"><i class="bi bi-plus-lg"></i> Add slide</button>
+            </div>
+          </div>
+
+          <button type="button" class="btn-brand mt-3" id="ppt-generate-btn"><i class="bi bi-easel"></i> Generate presentation</button>
+
+          <div class="surface p-4 mt-4" id="ppt-result-panel" style="display:none;">
+            <div class="d-flex align-items-center justify-content-between mb-3">
+              <h6 class="mb-0" id="ppt-result-title">Presentation</h6>
+              <span id="ppt-result-status"></span>
+            </div>
+            <div id="ppt-result-body"></div>
+          </div>
+        </div>
+
+        <div class="surface p-4">
+          <h6 class="mb-3">Generated presentations</h6>
+          <div id="ppt-list">
+            <div class="skeleton mb-2" style="height:56px; border-radius:10px;"></div>
+            <div class="skeleton" style="height:56px; border-radius:10px;"></div>
+          </div>
+          <div id="ppt-list-empty" class="empty-state d-none" style="padding:1.5rem 0.5rem;">
+            <div class="empty-icon"><i class="bi bi-easel"></i></div>
+            <h6>No presentations yet</h6>
+            <p style="font-size:0.82rem;">Presentations you generate will be listed here for download.</p>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script src="../assets/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
+<script src="../assets/js/config.js"></script>
+<script src="../assets/js/api.js"></script>
+<script src="../assets/js/theme.js"></script>
+<script src="../assets/js/toast.js"></script>
+<script src="../assets/js/nav.js"></script>
+<script src="../assets/js/modals.js"></script>
+<script src="../assets/js/generation-common.js"></script>
+<script src="../assets/js/ppt-generation.js"></script>
+</body>
+</html>

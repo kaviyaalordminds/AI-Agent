@@ -9,6 +9,7 @@ import app.models  # noqa: F401  (registers all ORM models before first use)
 from app.api.agent.router import router as agent_router
 from app.api.auth.router import router as auth_router
 from app.api.documents.router import router as documents_router
+from app.api.generation.router import router as generation_router
 from app.api.history.router import router as history_router
 from app.api.jobs.router import router as jobs_router
 from app.api.knowledge.router import router as knowledge_router
@@ -70,6 +71,7 @@ app.include_router(obsidian_router, prefix=settings.api_prefix)
 app.include_router(knowledge_router, prefix=settings.api_prefix)
 app.include_router(documents_router, prefix=settings.api_prefix)
 app.include_router(jobs_router, prefix=settings.api_prefix)
+app.include_router(generation_router, prefix=settings.api_prefix)
 app.include_router(system_router, prefix=settings.api_prefix)
 
 

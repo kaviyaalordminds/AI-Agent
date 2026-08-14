@@ -12,6 +12,8 @@ class DocumentFormat(str, enum.Enum):
     markdown = "markdown"
     docx = "docx"
     pdf = "pdf"
+    pptx = "pptx"
+    xlsx = "xlsx"
 
 
 class DocumentStatus(str, enum.Enum):

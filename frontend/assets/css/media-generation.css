@@ -1,0 +1,145 @@
+/* Shared styling for the Image / Video / Word / PowerPoint / Excel
+ * generation workspace pages — built on top of the existing theme.css /
+ * app.css / documents.css primitives (surface, btn-brand,
+ * form-control-premium, badge-pill, mode-pill, empty-state, skeleton) so
+ * these pages stay visually consistent with the rest of the app rather
+ * than introducing a parallel design language. */
+
+.gen-columns {
+  display: grid;
+  grid-template-columns: 1.15fr 0.85fr;
+  gap: 1.25rem;
+  align-items: start;
+}
+@media (max-width: 1100px) {
+  .gen-columns { grid-template-columns: 1fr; }
+}
+
+.gen-form textarea { width: 100%; min-height: 90px; resize: vertical; }
+
+.aspect-picker { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.aspect-pill {
+  display: flex; flex-direction: column; align-items: center; gap: 0.3rem;
+  padding: 0.55rem 0.7rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-surface-alt);
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.aspect-pill .aspect-swatch { border: 1.5px solid currentColor; border-radius: 3px; opacity: 0.75; }
+.aspect-pill.active { background: linear-gradient(135deg, var(--brand-500), var(--brand-600)); color: #fff; border-color: transparent; }
+
+/* --- Preview frame (image/video result) --- */
+.gen-preview-frame {
+  display: flex; align-items: center; justify-content: center;
+  min-height: 260px;
+  border-radius: var(--radius-md);
+  background:
+    linear-gradient(45deg, var(--bg-surface-alt) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--bg-surface-alt) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--bg-surface-alt) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--bg-surface-alt) 75%);
+  background-size: 20px 20px;
+  background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+  overflow: hidden;
+  position: relative;
+}
+.gen-preview-frame img, .gen-preview-frame video {
+  max-width: 100%; max-height: 420px; border-radius: var(--radius-sm);
+  display: block;
+}
+
+/* --- Job progress --- */
+.gen-progress-track {
+  height: 6px; border-radius: var(--radius-pill);
+  background: var(--bg-surface-alt);
+  overflow: hidden;
+}
+.gen-progress-fill {
+  height: 100%; border-radius: var(--radius-pill);
+  background: linear-gradient(135deg, var(--brand-500), var(--brand-600));
+  transition: width 300ms ease;
+}
+.gen-progress-fill.indeterminate {
+  width: 40% !important;
+  animation: gen-progress-slide 1.1s ease-in-out infinite;
+}
+@keyframes gen-progress-slide {
+  0% { margin-left: -40%; }
+  100% { margin-left: 100%; }
+}
+
+.gen-status-row { display: flex; align-items: center; gap: 0.6rem; font-size: 0.82rem; color: var(--text-muted); }
+
+/* --- Generic result/list rows, shared shape with .doc-list-row --- */
+.gen-list-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;
+  padding: 0.75rem 0.85rem;
+  border-radius: var(--radius-md);
+  margin-bottom: 0.5rem;
+  background: var(--bg-surface-alt);
+}
+.gen-list-row:last-child { margin-bottom: 0; }
+.gen-list-row .gen-title { font-size: 0.87rem; font-weight: 600; }
+.gen-list-row .gen-meta { font-size: 0.74rem; color: var(--text-muted); margin-top: 0.15rem; }
+.gen-list-row .gen-actions { display: flex; align-items: center; gap: 0.35rem; flex-shrink: 0; }
+.gen-list-row .gen-thumb {
+  width: 40px; height: 40px; border-radius: 8px; object-fit: cover; flex-shrink: 0;
+  background: var(--bg-canvas);
+}
+
+/* --- Structured content editors (Word/PPT/Excel) --- */
+.block-card, .slide-card, .sheet-card {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 0.9rem 1rem;
+  margin-bottom: 0.75rem;
+  background: var(--bg-surface-alt);
+}
+.block-card-head, .slide-card-head, .sheet-card-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;
+  margin-bottom: 0.6rem;
+}
+.block-card-head select, .slide-card-head select {
+  font-size: 0.8rem; padding: 0.35rem 0.6rem;
+}
+.block-remove-btn, .slide-remove-btn, .sheet-remove-btn, .row-remove-btn {
+  border: none; background: transparent; color: var(--text-muted);
+  width: 28px; height: 28px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.block-remove-btn:hover, .slide-remove-btn:hover, .sheet-remove-btn:hover, .row-remove-btn:hover {
+  background: var(--danger-bg); color: var(--danger);
+}
+.block-card textarea, .slide-card textarea { width: 100%; resize: vertical; min-height: 60px; }
+.block-card input, .slide-card input { width: 100%; }
+.list-items-input { font-size: 0.85rem; }
+
+.add-block-bar, .add-slide-bar { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.5rem; }
+
+/* --- Table block / Excel sheet grid --- */
+.grid-editor { width: 100%; border-collapse: separate; border-spacing: 0.35rem; }
+.grid-editor input { padding: 0.35rem 0.5rem; font-size: 0.8rem; }
+.grid-editor th { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-muted); text-align: left; padding: 0 0.35rem; }
+.grid-editor-wrap { overflow-x: auto; }
+.grid-row-controls { display: flex; gap: 0.4rem; margin-top: 0.5rem; }
+
+.chart-config-row {
+  display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 0.5rem; align-items: center;
+  margin-bottom: 0.5rem;
+}
+@media (max-width: 640px) { .chart-config-row { grid-template-columns: 1fr; } }
+
+.capability-banner {
+  display: flex; align-items: flex-start; gap: 0.6rem;
+  padding: 0.8rem 1rem;
+  border-radius: var(--radius-md);
+  background: var(--warning-bg);
+  color: var(--warning);
+  font-size: 0.84rem;
+  margin-bottom: 1.1rem;
+}
+.capability-banner i { margin-top: 0.15rem; }

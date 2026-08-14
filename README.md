@@ -188,6 +188,59 @@ page (Settings → System Status, or the sidebar's own entry).
   provider families establish the pattern the remaining MCP/website-
   generation integrations will follow — application code never talks to
   a vendor SDK, external API, or the filesystem directly.
+- **AI Media + Document Generation** (Gemini Image/Video, Word/PPT/Excel):
+  five new generation capabilities, each reusing existing architecture
+  rather than duplicating it.
+  - **Image generation**: `GeminiImageProvider` calls the Gemini API's
+    Imagen models directly over `httpx` (no new SDK dependency — avoids
+    the `google-genai` SDK's pydantic/httpx version conflicts identified
+    earlier). `POST /api/generation/image` creates a `GenerationJob`,
+    `GET /api/generation/image/{job_id}` polls status,
+    `GET /api/generation/image/{job_id}/download` streams the result.
+  - **Video generation**: `GeminiVideoProvider` drives the Gemini API's
+    Veo models through their real async lifecycle — submit
+    (`:predictLongRunning`) → poll the operation → download the finished
+    file — which is genuinely long-running (minutes), so it always runs
+    through the `GenerationJob` queue rather than blocking a request.
+    Optional image-to-video via a base64-encoded reference image.
+    Mirrors the image endpoints at `POST /api/generation/video`.
+  - **Word/PowerPoint/Excel generation**: `POST /api/generation/document/
+    {word,ppt,excel}` take fully structured content (no AI provider
+    involved) — headings/paragraphs/bullet & numbered lists/tables for
+    Word; title/subtitle/slides/bullets/speaker notes for PowerPoint;
+    sheets/headers/rows/formulas/column widths/freeze panes/bar-line-pie
+    charts for Excel — and render real, valid `.docx`/`.pptx`/`.xlsx`
+    files via `python-docx`/`python-pptx`/`openpyxl`. These reuse the
+    *existing* `Document` model/table and `/api/documents/{id}/download`
+    endpoint (extended with two new `DocumentFormat` values, `pptx` and
+    `xlsx`, via an `ALTER TYPE ... ADD VALUE` migration) rather than
+    creating parallel tables/routes — a `Document` row doesn't care
+    whether its content came from an AI draft or caller-supplied
+    structure, only what format the result is. The AI-drafted
+    `/api/documents` endpoint now rejects `pptx`/`xlsx` (422) since it
+    has no logic to produce them from a free-text prompt — those formats
+    only make sense via the structured endpoints.
+  - Every one of the five generation actions is logged to History
+    (`image`/`video`/`document` types, honest `completed`/`failed`
+    status) and can optionally be associated with a project — exactly
+    like every other generation path in this app. All nine endpoints
+    require an authenticated session and CSRF on state-changing calls;
+    the Gemini API key is read only from backend environment variables
+    (`GEMINI_API_KEY`, falling back to `GOOGLE_API_KEY`) and is never
+    sent to or reachable from the frontend — the frontend only ever
+    calls this backend, never the Gemini API directly.
+  - **Frontend**: five new pages (`image-generation.html`,
+    `video-generation.html`, `word-generation.html`, `ppt-generation.html`,
+    `excel-generation.html`) reusing the existing design system (`surface`,
+    `btn-brand`, `form-control-premium`, `badge-pill`, `empty-state`,
+    dark/light theme) rather than introducing a new one — plain HTML5 +
+    Bootstrap 5 + vanilla JS, no framework. Image/video pages show live
+    job progress (queued → processing → completed/failed) and a
+    capability banner when the configured provider is unavailable; Word/
+    PPT/Excel pages are structured content editors (block/slide/sheet
+    builders, including a real add/remove-row/column spreadsheet grid
+    and per-sheet chart configuration). All five are wired into the
+    sidebar nav and the dashboard's quick-create tiles.
 
 Everything above is fully wired end-to-end (frontend ↔ backend ↔
 database ↔ Claude API ↔ vault filesystem) and covered by an automated
@@ -288,13 +341,19 @@ detection, never a hard-coded "working" state:
 - **Transcription** — install a local Whisper backend
   (`pip install faster-whisper` is recommended; no ffmpeg required) with
   `TRANSCRIPTION_PROVIDER=local`.
-- **Image / Video / Voice cloning** — no bundled local backend; these
-  realistically need a GPU and multi-GB model checkpoints this
-  application does not ship. They report an honest "unavailable" status
-  with exact reasons until you either install a real local backend or
-  set `IMAGE_PROVIDER=cloud`/`VIDEO_PROVIDER=cloud`/`VOICE_PROVIDER=cloud`
-  with a real vendor integration (architecture point, not yet
-  implemented — see `app/integrations/generation/*/cloud_provider.py`).
+- **Image / Video** — no bundled local backend; these realistically need
+  a GPU and multi-GB model checkpoints this application does not ship,
+  so `IMAGE_PROVIDER=local`/`VIDEO_PROVIDER=local` (the default) reports
+  an honest "unavailable" status with exact reasons. Set
+  `IMAGE_PROVIDER=cloud`/`VIDEO_PROVIDER=cloud` plus `GEMINI_API_KEY`
+  (or `GOOGLE_API_KEY`) to switch to the real `GeminiImageProvider`
+  (Imagen)/`GeminiVideoProvider` (Veo) — see "AI Media + Document
+  Generation" above and `GEMINI_IMAGE_MODEL`/`GEMINI_VIDEO_MODEL` in
+  `.env.example` for the model names.
+- **Voice cloning** — no bundled local backend and no cloud provider
+  implemented yet; `VOICE_PROVIDER=cloud` reports honest "unavailable"
+  until a real vendor integration lands (architecture point — see
+  `app/integrations/generation/voice/cloud_provider.py`).
 
 ## Architecture
 
@@ -344,11 +403,17 @@ backend/
                           same never-lose-input contract as agents/)
     documents/              generator.py (AI-drafted content -> render ->
                           StorageProvider, same never-lose-input contract),
-                          render.py (real markdown -> docx/pdf conversion)
+                          render.py (real markdown -> docx/pdf conversion),
+                          structured.py (structured/non-AI content -> render
+                          -> StorageProvider, same Document table),
+                          structured_render.py (real docx/pptx/xlsx
+                          rendering via python-docx/python-pptx/openpyxl)
     jobs/                   queue.py (JobQueue interface), in_process_queue.py
                           (real asyncio worker pool, Celery/RQ-swappable),
                           worker.py (Provider -> Storage -> job-row dispatcher
-                          for audio/transcription/image/video job types)
+                          for audio/transcription/image/video job types),
+                          service.py (shared create/lookup/download logic
+                          used by both /api/jobs/* and /api/generation/*)
     api/
       auth/               /api/auth/* routes
       users/              /api/users/* routes
@@ -358,11 +423,13 @@ backend/
       obsidian/              /api/obsidian/* routes (notes CRUD, search, status)
       knowledge/             /api/knowledge/* routes (health, graph, gap analyses)
       documents/              /api/documents/* routes (create/list/get/download/delete)
+      generation/             /api/generation/* routes (image/video jobs;
+                            structured word/ppt/excel document generation)
       jobs/                   /api/jobs/* routes (create audio job, list/get/
                             cancel/download; concurrency + rate limiting)
       system/                 /api/system/capabilities, /api/system/providers/health
   alembic/                DB migrations
-  tests/                  pytest suite (211 tests, real Postgres, no mocks)
+  tests/                  pytest suite (256 tests, real Postgres, no mocks)
 
 frontend/
   index.html              session-aware redirect (dashboard vs login)
@@ -372,14 +439,17 @@ frontend/
                           obsidian (vault browser), knowledge (Knowledge
                           Center), knowledge-gaps (Knowledge Gaps), documents
                           (Documents Studio), system-status (capabilities +
-                          component health)
+                          component health), image-generation, video-generation,
+                          word-generation, ppt-generation, excel-generation
   assets/
     css/                  design tokens (theme.css), auth layout, app shell,
                           workspace-layout.css (full-screen/split-screen),
                           agent.css (chat UI), obsidian.css (vault browser),
                           knowledge.css (health dashboard, SVG graph, gap results),
                           documents.css (draft form, format picker, file list),
-                          system-status.css (capability cards, health rows)
+                          system-status.css (capability cards, health rows),
+                          media-generation.css (image/video job progress +
+                          preview frame, structured Word/PPT/Excel editors)
     js/                   api client (aiProviderLabel() maps the configurable
                           AI_PROVIDER to a display name — never hard-codes
                           "Claude"), theme, toast, nav/shell, generic confirm
@@ -388,7 +458,12 @@ frontend/
                           minimal safe markdown preview renderer, force-directed
                           SVG knowledge graph renderer, system-status.js
                           (shared capability-grid/health-list renderer, used by
-                          both the standalone page and the Settings tab), page
+                          both the standalone page and the Settings tab),
+                          generation-common.js (shared job polling/status
+                          badges/project-picker used by the five new
+                          generation pages), image-generation.js,
+                          video-generation.js, word-generation.js,
+                          ppt-generation.js, excel-generation.js, page
                           controllers
     vendor/                vendored Bootstrap 5 + Bootstrap Icons (no CDN
                           dependency — see below)
@@ -508,7 +583,7 @@ cd backend
 .venv/bin/pytest tests/ -v
 ```
 
-211 tests covering signup, duplicate-email/weak-password/mismatch
+256 tests covering signup, duplicate-email/weak-password/mismatch
 rejection, email verification (incl. single-use/expiry), login (incl.
 unverified-account block, wrong password, account lockout), logout,
 logout-all, per-session revocation, forgot/reset password (incl.
@@ -562,7 +637,17 @@ fabricating success), and the system Capability/Health APIs
 (`/api/system/capabilities` reporting all ten categories with real
 status, `/api/system/providers/health` covering database/AI
 provider/Obsidian/storage/job-queue, and a regression test proving
-neither endpoint ever leaks a configured secret into its response) — all
+neither endpoint ever leaks a configured secret into its response), and
+the AI Media + Document Generation module (`test_media_generation.py`:
+image/video job creation, validation, auth/CSRF enforcement, the honest
+not-configured failure path with no real Gemini call, a fake-provider
+success path proving the complete job pipeline and download work,
+reference-image-to-video handling, project association, cross-user
+isolation, History logging, and — for Word/PPT/Excel — real file
+generation verified via ZIP structure/magic bytes (`word/document.xml`,
+`ppt/slides/slideN.xml`, `xl/worksheets/sheet1.xml`, real chart XML for
+the Excel chart path), plus a regression test proving the AI-drafted
+`/api/documents` endpoint correctly rejects `pptx`/`xlsx`) — all
 against a real PostgreSQL test database and a real (temp-directory)
 filesystem vault/storage root, no mocked ORM and no mocked filesystem.
 
@@ -627,7 +712,7 @@ This repo follows the phased plan from the product spec:
 4. ✅ **AI Agent** — AI provider architecture (Ollama/Anthropic/Gemini, mode-aware factory), orchestrator, chat, streaming, 7 modes (tool-calling architecture still to come)
 5. ✅ **Obsidian** — per-user vault (never a shared/global one), search/read/create/update/append/move/delete/get_metadata, connection status, Knowledge/Research mode grounding (MCP/REST bridge to a live Obsidian.app instance is a possible future provider — the current one operates directly on vault files, which is what a live Obsidian instance is backed by anyway)
 6. ✅ **Knowledge Intelligence** — gap/duplicate/outdated/broken-link/orphan detection, health score, knowledge graph, AI-backed gap analysis, knowledge-update history, auto-update policy setting (Auto/Approval/Smart Auto — saved now, ready for the future automatic-apply capability)
-7. 🟡 **Creative tools** — image/audio/video/document/design generation. **Document generation is done**: AI-drafted content rendered to real Markdown/.docx/.pdf via `StorageProvider`, gated honestly by AI provider configuration. **Local audio (TTS) generation is done**: real `espeak-ng`-backed synthesis through the new job queue (`POST /api/jobs/audio`). Full provider architecture (interface + local/cloud factory + honest capability detection) exists for all five generation categories (Audio/Transcription/Image/Video/Voice) plus Deployment — Transcription/Image/Video/Voice cloning remain ⬜ for actual generation (each needs a real backend/GPU/model or a real external vendor integration), but report exactly why via `GET /api/system/capabilities` rather than pretending to work. Website/3D Website/Poster/Logo/Graphic Design generation itself remain ⬜.
+7. 🟡 **Creative tools** — image/audio/video/document/design generation. **Document generation is done**: AI-drafted content rendered to real Markdown/.docx/.pdf via `StorageProvider`, gated honestly by AI provider configuration. **Structured Word/PowerPoint/Excel generation is done**: `POST /api/generation/document/{word,ppt,excel}` render real .docx/.pptx/.xlsx files from caller-supplied structured content (headings/paragraphs/lists/tables; slides/bullets/notes; sheets/rows/formulas/charts) via `python-docx`/`python-pptx`/`openpyxl` — no AI provider required. **Local audio (TTS) generation is done**: real `espeak-ng`-backed synthesis through the job queue (`POST /api/jobs/audio`). **Image and video generation via Gemini are done**: `GeminiImageProvider` (Imagen `:predict`) and `GeminiVideoProvider` (Veo `:predictLongRunning` + poll + download) are real REST-based providers, selected when `GEMINI_API_KEY`/`GOOGLE_API_KEY` + `IMAGE_PROVIDER=cloud`/`VIDEO_PROVIDER=cloud` are configured; both run through the `GenerationJob` queue (`POST /api/generation/image`, `POST /api/generation/video`) with real status polling and download. Full provider architecture (interface + local/cloud factory + honest capability detection) exists for all five generation categories (Audio/Transcription/Image/Video/Voice) plus Deployment — Transcription/Voice cloning remain ⬜ for actual generation (each needs a real backend/GPU/model or a real external vendor integration), but report exactly why via `GET /api/system/capabilities` rather than pretending to work. Website/3D Website/Poster/Logo/Graphic Design generation itself remain ⬜.
 8. 🟡 **Developer Studio** — website/3D website generation, live preview, deployment. **Deployment architecture is done**: `DeploymentProvider` (`LocalDeploymentProvider` — real zip packaging, no credentials — plus Netlify/Vercel architecture points) is ready for website generation to use once built; website generation itself remains ⬜.
 9. 🟡 **Integration** — projects ↔ knowledge ↔ history ↔ files ↔ AI context ↔ activity log. **Production-readiness architecture landed this phase**: local/production runtime-mode switching (`AI_RUNTIME_MODE`), a real generation job queue (`GenerationJob` + `JobQueue` + `InProcessJobQueue`, Celery/RQ-swappable), the Capability API (`GET /api/system/capabilities`) and Health API (`GET /health`, `GET /api/system/providers/health`), a System Status frontend page + Settings tabs, and technical rate-limiting/concurrency/upload-size protection (no user-visible credit system). Remaining integration work: wiring future Image/Video generation through the job queue, and a persistent-broker `JobQueue` implementation for true multi-worker production scaling.
 10. ⬜ **Testing** — expanded integration/E2E/security test coverage

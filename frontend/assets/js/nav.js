@@ -15,11 +15,13 @@ const NAV_STRUCTURE = [
   {
     label: "Create",
     items: [
-      { key: "image", label: "Image", icon: "bi-image", href: "#", enabled: false },
+      { key: "image", label: "Image", icon: "bi-image", href: "image-generation.html", enabled: true },
       { key: "audio", label: "Audio", icon: "bi-mic", href: "#", enabled: false },
-      { key: "video", label: "Video", icon: "bi-camera-reels", href: "#", enabled: false },
+      { key: "video", label: "Video", icon: "bi-camera-reels", href: "video-generation.html", enabled: true },
       { key: "documents", label: "Documents", icon: "bi-file-earmark-text", href: "documents.html", enabled: true },
-      { key: "presentations", label: "Presentations", icon: "bi-easel", href: "#", enabled: false },
+      { key: "word", label: "Word Docs", icon: "bi-file-earmark-word", href: "word-generation.html", enabled: true },
+      { key: "excel", label: "Spreadsheets", icon: "bi-file-earmark-spreadsheet", href: "excel-generation.html", enabled: true },
+      { key: "presentations", label: "Presentations", icon: "bi-easel", href: "ppt-generation.html", enabled: true },
       { key: "website", label: "Website", icon: "bi-globe", href: "#", enabled: false },
       { key: "website3d", label: "3D Website", icon: "bi-badge-3d", href: "#", enabled: false },
       { key: "poster", label: "Poster", icon: "bi-file-earmark-image", href: "#", enabled: false },

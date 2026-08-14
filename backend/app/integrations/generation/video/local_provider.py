@@ -32,5 +32,7 @@ class LocalVideoProvider(VideoProvider):
             ),
         )
 
-    async def generate(self, prompt: str, duration_seconds: float = 4.0) -> GeneratedVideo:
+    async def generate(
+        self, prompt: str, duration_seconds: float = 4.0, reference_image: bytes | None = None
+    ) -> GeneratedVideo:
         raise GenerationProviderNotConfiguredError(self.capability().reason)
