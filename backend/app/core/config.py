@@ -109,15 +109,19 @@ class Settings(BaseSettings):
     obsidian_vault_root: str = "../storage/obsidian_vaults"
 
     # --- Audio / Transcription / Image / Video / Voice providers ---
-    # These are architected (interface + factory + honest capability
-    # detection) but only "local" has a real implementation attempt in
-    # this deployment; "cloud" is a configuration point for a future
-    # vendor integration. See app/integrations/{audio,transcription,image,
-    # video,voice}/ and GET /api/system/capabilities.
+    # Each is architected as interface + local/cloud factory + honest
+    # capability detection. Image and video default to "cloud" (real
+    # Gemini Imagen/Veo providers, API-key-based, no GPU/local model ever
+    # required or installed) since this application is API-first for
+    # generation — see app/integrations/generation/{image,video}/
+    # gemini_provider.py. Audio/transcription/voice default to "local"
+    # (real local TTS via espeak-ng for audio; transcription/voice "cloud"
+    # remain configuration points for a future vendor integration). See
+    # GET /api/system/capabilities for live status of every provider.
     tts_provider: Literal["local", "cloud"] = "local"
     transcription_provider: Literal["local", "cloud"] = "local"
-    image_provider: Literal["local", "cloud"] = "local"
-    video_provider: Literal["local", "cloud"] = "local"
+    image_provider: Literal["local", "cloud"] = "cloud"
+    video_provider: Literal["local", "cloud"] = "cloud"
     voice_provider: Literal["local", "cloud"] = "local"
 
     # --- Deployment provider ---

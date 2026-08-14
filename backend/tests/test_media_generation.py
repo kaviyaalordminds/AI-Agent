@@ -102,9 +102,10 @@ class TestImageGenerationEndpoint:
         assert resp.status_code == 422
 
     def test_honestly_fails_when_no_provider_configured(self, auth_client):
-        """Default test config has no Gemini key and IMAGE_PROVIDER=local
-        with no local backend installed — the job must land on `failed`
-        with a real reason, never `completed` with fabricated output."""
+        """Default test config has IMAGE_PROVIDER=cloud (the app default —
+        image generation is API-based only) but no GEMINI_API_KEY — the
+        job must land on `failed` with a real reason, never `completed`
+        with fabricated output."""
         client, csrf = auth_client
         resp = client.post("/api/generation/image", json={"prompt": "a red bicycle"}, headers={"X-CSRF-Token": csrf})
         assert resp.status_code == 202
