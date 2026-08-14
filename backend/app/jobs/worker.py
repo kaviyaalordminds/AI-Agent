@@ -62,21 +62,33 @@ async def _run_transcription_job(job: GenerationJob, storage) -> dict:
 
 async def _run_image_job(job: GenerationJob, storage) -> dict:
     provider = get_image_provider()
+    cap = provider.capability()
     meta = job.input_metadata
+    logger.info(
+        "job %s: calling image provider=%s model_configured=%s size=%sx%s",
+        job.id, cap.provider, cap.available, meta.get("width", 1024), meta.get("height", 1024),
+    )
     result = await provider.generate(meta["prompt"], width=meta.get("width", 1024), height=meta.get("height", 1024))
+    logger.info("job %s: image provider returned %d bytes (%s)", job.id, len(result.data), result.content_type)
     stored = storage.write("generated_images", str(job.user_id), f"{job.id}.{result.format}", result.data)
     return {"storage_ref": stored.ref, "content_type": result.content_type, "size_bytes": stored.size_bytes}
 
 
 async def _run_video_job(job: GenerationJob, storage) -> dict:
     provider = get_video_provider()
+    cap = provider.capability()
     meta = job.input_metadata
     reference_image = None
     if meta.get("reference_image_ref"):
         reference_image = storage.read(meta["reference_image_ref"])
+    logger.info(
+        "job %s: calling video provider=%s model_configured=%s duration=%s has_reference_image=%s",
+        job.id, cap.provider, cap.available, meta.get("duration_seconds", 4.0), reference_image is not None,
+    )
     result = await provider.generate(
         meta["prompt"], duration_seconds=meta.get("duration_seconds", 4.0), reference_image=reference_image
     )
+    logger.info("job %s: video provider returned %d bytes (%s)", job.id, len(result.data), result.content_type)
     stored = storage.write("generated_videos", str(job.user_id), f"{job.id}.{result.format}", result.data)
     return {"storage_ref": stored.ref, "content_type": result.content_type, "size_bytes": stored.size_bytes}
 
@@ -97,11 +109,16 @@ async def run_job(job_id: uuid.UUID) -> None:
             logger.warning("run_job called for missing job %s", job_id)
             return
         if job.status == JobStatus.cancelled:
+            logger.info("job %s (%s) was cancelled before it started running", job_id, job.type.value)
             return
 
         job.status = JobStatus.processing
         job.started_at = utcnow()
         db.commit()
+        logger.info(
+            "job %s started: type=%s provider=%s user=%s project=%s",
+            job_id, job.type.value, job.provider, job.user_id, job.project_id,
+        )
 
         runner = _RUNNERS.get(job.type)
         if runner is None:
@@ -111,6 +128,7 @@ async def run_job(job_id: uuid.UUID) -> None:
         try:
             output = await runner(job, storage)
         except (GenerationProviderError, StorageError) as exc:
+            logger.warning("job %s (%s) failed: %s", job_id, job.type.value, exc)
             job.status = JobStatus.failed
             job.error = str(exc)
             job.completed_at = utcnow()
@@ -132,6 +150,10 @@ async def run_job(job_id: uuid.UUID) -> None:
         job.completed_at = utcnow()
         _log_history(db, job, HistoryEntryStatus.completed)
         db.commit()
+        logger.info(
+            "job %s completed: type=%s storage_ref=%s size_bytes=%s",
+            job_id, job.type.value, output.get("storage_ref"), output.get("size_bytes"),
+        )
     finally:
         db.close()
 

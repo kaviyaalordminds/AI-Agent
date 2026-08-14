@@ -41,11 +41,25 @@ function genDocStatusBadge(status) {
 /* Polls GET `getUrl` every 900ms until the job reaches a terminal status
  * (completed/failed/cancelled), calling onTick with each snapshot so the
  * caller can update a progress UI. Gives up after `timeoutMs` rather than
- * polling forever if something is stuck. */
-async function genPollJob(getUrl, { onTick, timeoutMs = 120000, intervalMs = 900 } = {}) {
+ * polling forever if something is stuck. Tolerates a few consecutive
+ * transient failures (network blip, one slow request) without aborting
+ * the whole poll — a real generation can run for minutes, so one bad
+ * tick must not surface as a false "generation failed". */
+async function genPollJob(getUrl, { onTick, timeoutMs = 120000, intervalMs = 900, maxConsecutiveErrors = 3 } = {}) {
   const deadline = Date.now() + timeoutMs;
+  let consecutiveErrors = 0;
   while (Date.now() < deadline) {
-    const job = await window.AIAgentApi.get(getUrl);
+    let job;
+    try {
+      job = await window.AIAgentApi.get(getUrl);
+      consecutiveErrors = 0;
+    } catch (err) {
+      consecutiveErrors += 1;
+      console.error(`[generation-common] Poll request failed (attempt ${consecutiveErrors}/${maxConsecutiveErrors}):`, err);
+      if (consecutiveErrors >= maxConsecutiveErrors) throw err;
+      await new Promise((resolve) => setTimeout(resolve, intervalMs));
+      continue;
+    }
     if (onTick) onTick(job);
     if (["completed", "failed", "cancelled"].includes(job.status)) return job;
     await new Promise((resolve) => setTimeout(resolve, intervalMs));
@@ -64,8 +78,9 @@ async function genLoadProjectOptions(selectId) {
       opt.textContent = p.name;
       select.appendChild(opt);
     });
-  } catch {
+  } catch (err) {
     // Non-fatal: the project picker just stays limited to "No project".
+    console.error(`[generation-common] Could not load projects for #${selectId}:`, err);
   }
 }
 

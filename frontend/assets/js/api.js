@@ -1,7 +1,10 @@
 /* Thin fetch wrapper: attaches credentials + CSRF header, parses the
  * backend's error envelope into readable messages, and never pretends a
- * failed request succeeded. */
+ * failed request succeeded. Every request carries a hard timeout so a
+ * hung backend/network surfaces as a clear error instead of leaving a
+ * page stuck in "Loading…" forever. */
 const CSRF_COOKIE_NAME = "aiagent_csrf";
+const DEFAULT_TIMEOUT_MS = 20000;
 
 function readCookie(name) {
   const match = document.cookie.match(new RegExp("(^|;\\s*)" + name + "=([^;]*)"));
@@ -16,7 +19,7 @@ class ApiError extends Error {
   }
 }
 
-async function apiRequest(path, { method = "GET", body, headers = {} } = {}) {
+async function apiRequest(path, { method = "GET", body, headers = {}, timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
   const isUnsafe = method !== "GET" && method !== "HEAD";
   const finalHeaders = { ...headers };
   if (body !== undefined) finalHeaders["Content-Type"] = "application/json";
@@ -25,6 +28,9 @@ async function apiRequest(path, { method = "GET", body, headers = {} } = {}) {
     if (csrf) finalHeaders["X-CSRF-Token"] = csrf;
   }
 
+  const controller = new AbortController();
+  const timeoutId = timeoutMs ? setTimeout(() => controller.abort(), timeoutMs) : null;
+
   let response;
   try {
     response = await fetch(`${window.AIAgentConfig.apiBase}${path}`, {
@@ -32,12 +38,17 @@ async function apiRequest(path, { method = "GET", body, headers = {} } = {}) {
       credentials: "include",
       headers: finalHeaders,
       body: body !== undefined ? JSON.stringify(body) : undefined,
+      signal: controller.signal,
     });
   } catch (networkError) {
-    throw new ApiError(
-      "Could not reach the server. Check your connection and that the backend is running.",
-      0
-    );
+    const message =
+      networkError && networkError.name === "AbortError"
+        ? "The server took too long to respond. Please try again."
+        : "Could not reach the server. Check your connection and that the backend is running.";
+    console.error(`[api] ${method} ${path} failed:`, networkError);
+    throw new ApiError(message, 0);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
   }
 
   let data = null;
@@ -52,6 +63,7 @@ async function apiRequest(path, { method = "GET", body, headers = {} } = {}) {
 
   if (!response.ok) {
     const message = (data && data.detail) || `Request failed (${response.status}).`;
+    console.error(`[api] ${method} ${path} -> ${response.status}: ${message}`);
     throw new ApiError(message, response.status, (data && data.errors) || []);
   }
 
@@ -59,10 +71,10 @@ async function apiRequest(path, { method = "GET", body, headers = {} } = {}) {
 }
 
 window.AIAgentApi = {
-  get: (path) => apiRequest(path, { method: "GET" }),
-  post: (path, body) => apiRequest(path, { method: "POST", body }),
-  patch: (path, body) => apiRequest(path, { method: "PATCH", body }),
-  del: (path) => apiRequest(path, { method: "DELETE" }),
+  get: (path, options) => apiRequest(path, { method: "GET", ...options }),
+  post: (path, body, options) => apiRequest(path, { method: "POST", body, ...options }),
+  patch: (path, body, options) => apiRequest(path, { method: "PATCH", body, ...options }),
+  del: (path, options) => apiRequest(path, { method: "DELETE", ...options }),
   getCsrfToken: () => readCookie(CSRF_COOKIE_NAME),
   apiBase: () => window.AIAgentConfig.apiBase,
   ApiError,

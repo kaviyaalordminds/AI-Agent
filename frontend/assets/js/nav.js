@@ -195,7 +195,12 @@ async function initAppShell(activeKey) {
   let user;
   try {
     user = await window.AIAgentApi.get("/users/me");
-  } catch {
+  } catch (err) {
+    // Covers both "not logged in" (401) and a hung/unreachable backend
+    // (the request now times out after 20s rather than hanging forever
+    // — see api.js) — either way, never leave the page stuck on
+    // "Loading…"; send the user somewhere actionable instead.
+    console.error("[nav] Could not load the current user, redirecting to login:", err);
     window.location.href = `login.html?session_expired=1`;
     return null;
   }

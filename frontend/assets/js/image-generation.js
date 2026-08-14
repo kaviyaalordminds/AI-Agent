@@ -80,6 +80,8 @@ function renderProgress(job) {
 function renderList() {
   const listEl = document.getElementById("img-list");
   const emptyEl = document.getElementById("img-list-empty");
+  emptyEl.querySelector("h6").textContent = "No images yet";
+  emptyEl.querySelector("p").textContent = "Images you generate will be listed here.";
   if (!imageJobs.length) {
     listEl.innerHTML = "";
     emptyEl.classList.remove("d-none");
@@ -111,10 +113,17 @@ function renderList() {
 }
 
 async function loadImageJobs() {
+  const listEl = document.getElementById("img-list");
+  const emptyEl = document.getElementById("img-list-empty");
   try {
     imageJobs = await window.AIAgentApi.get("/jobs?type=image");
     renderList();
-  } catch {
+  } catch (err) {
+    console.error("[image-generation] Could not load recent generations:", err);
+    listEl.innerHTML = "";
+    emptyEl.classList.remove("d-none");
+    emptyEl.querySelector("h6").textContent = "Unable to load recent generations";
+    emptyEl.querySelector("p").textContent = err.message || "Please try again.";
     window.AIAgentToast.show("Could not load your recent images.", "error");
   }
 }
@@ -123,8 +132,9 @@ async function loadCapability() {
   try {
     const caps = await window.AIAgentApi.get("/system/capabilities");
     window.GenerationCommon.renderCapabilityBanner("capability-banner", caps.image);
-  } catch {
+  } catch (err) {
     // Non-fatal: generation will still surface a clear error if attempted.
+    console.error("[image-generation] Could not load provider capability:", err);
   }
 }
 
@@ -176,13 +186,25 @@ async function generateImage() {
 }
 
 async function init() {
-  const user = await window.AppShell.initAppShell("image");
+  let user;
+  try {
+    user = await window.AppShell.initAppShell("image");
+  } catch (err) {
+    console.error("[image-generation] Failed to initialize app shell:", err);
+    window.AIAgentToast.show("Could not load the application shell. Please refresh the page.", "error");
+    return;
+  }
   if (!user) return;
 
-  renderAspectPicker();
-  document.getElementById("img-generate-btn").addEventListener("click", generateImage);
+  try {
+    renderAspectPicker();
+    document.getElementById("img-generate-btn").addEventListener("click", generateImage);
 
-  await Promise.all([loadCapability(), window.GenerationCommon.loadProjectOptions("img-project"), loadImageJobs()]);
+    await Promise.all([loadCapability(), window.GenerationCommon.loadProjectOptions("img-project"), loadImageJobs()]);
+  } catch (err) {
+    console.error("[image-generation] Unexpected error during page initialization:", err);
+    window.AIAgentToast.show("Something went wrong loading this page. Please refresh and try again.", "error");
+  }
 }
 
 init();

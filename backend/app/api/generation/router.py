@@ -12,6 +12,7 @@ which resolve a provider through get_image_provider()/get_video_provider()
 queue. The Gemini API key never leaves the backend process.
 """
 import base64
+import logging
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -46,6 +47,8 @@ from app.schemas.job import JobOut
 from app.security.rate_limit import enforce_rate_limit
 from app.security.sessions import get_current_user, require_csrf
 
+logger = logging.getLogger("app.api.generation")
+
 router = APIRouter(prefix="/generation", tags=["generation"])
 
 
@@ -74,14 +77,21 @@ async def create_image_generation(
     enforce_concurrency_limit(db, user)
     project = resolve_owned_project(db, user, payload.project_id)
 
-    return create_and_submit_job(
+    provider_name = get_image_provider().capability().provider
+    logger.info(
+        "incoming image generation request: user=%s project=%s provider=%s size=%sx%s",
+        user.id, project.id if project else None, provider_name, payload.width, payload.height,
+    )
+    job = create_and_submit_job(
         db,
         user,
         project,
         JobType.image,
-        get_image_provider().capability().provider,
+        provider_name,
         {"prompt": payload.prompt, "width": payload.width, "height": payload.height},
     )
+    logger.info("image generation job created: job_id=%s status=%s", job.id, job.status.value)
+    return job
 
 
 @router.get("/image/{job_id}", response_model=JobOut)
@@ -118,14 +128,22 @@ async def create_video_generation(
         )
         input_metadata["reference_image_ref"] = stored.ref
 
-    return create_and_submit_job(
+    provider_name = get_video_provider().capability().provider
+    logger.info(
+        "incoming video generation request: user=%s project=%s provider=%s duration=%s has_reference_image=%s",
+        user.id, project.id if project else None, provider_name, payload.duration_seconds,
+        bool(payload.reference_image_base64),
+    )
+    job = create_and_submit_job(
         db,
         user,
         project,
         JobType.video,
-        get_video_provider().capability().provider,
+        provider_name,
         input_metadata,
     )
+    logger.info("video generation job created: job_id=%s status=%s", job.id, job.status.value)
+    return job
 
 
 @router.get("/video/{job_id}", response_model=JobOut)

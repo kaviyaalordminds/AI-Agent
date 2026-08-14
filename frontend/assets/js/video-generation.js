@@ -33,7 +33,8 @@ function wireReferenceImagePicker() {
       referenceImageBase64 = await fileToBase64(file);
       previewImg.src = `data:${file.type};base64,${referenceImageBase64}`;
       preview.classList.remove("d-none");
-    } catch {
+    } catch (err) {
+      console.error("[video-generation] Could not read reference image file:", err);
       window.AIAgentToast.show("Could not read that image file.", "error");
     }
   });
@@ -89,6 +90,8 @@ function renderProgress(job) {
 function renderList() {
   const listEl = document.getElementById("vid-list");
   const emptyEl = document.getElementById("vid-list-empty");
+  emptyEl.querySelector("h6").textContent = "No videos yet";
+  emptyEl.querySelector("p").textContent = "Videos you generate will be listed here.";
   if (!videoJobs.length) {
     listEl.innerHTML = "";
     emptyEl.classList.remove("d-none");
@@ -120,10 +123,17 @@ function renderList() {
 }
 
 async function loadVideoJobs() {
+  const listEl = document.getElementById("vid-list");
+  const emptyEl = document.getElementById("vid-list-empty");
   try {
     videoJobs = await window.AIAgentApi.get("/jobs?type=video");
     renderList();
-  } catch {
+  } catch (err) {
+    console.error("[video-generation] Could not load recent generations:", err);
+    listEl.innerHTML = "";
+    emptyEl.classList.remove("d-none");
+    emptyEl.querySelector("h6").textContent = "Unable to load recent generations";
+    emptyEl.querySelector("p").textContent = err.message || "Please try again.";
     window.AIAgentToast.show("Could not load your recent videos.", "error");
   }
 }
@@ -132,8 +142,9 @@ async function loadCapability() {
   try {
     const caps = await window.AIAgentApi.get("/system/capabilities");
     window.GenerationCommon.renderCapabilityBanner("capability-banner", caps.video);
-  } catch {
+  } catch (err) {
     // Non-fatal: generation will still surface a clear error if attempted.
+    console.error("[video-generation] Could not load provider capability:", err);
   }
 }
 
@@ -187,16 +198,36 @@ async function generateVideo() {
 }
 
 async function init() {
-  const user = await window.AppShell.initAppShell("video");
+  let user;
+  try {
+    user = await window.AppShell.initAppShell("video");
+  } catch (err) {
+    // initAppShell itself should never throw (it catches /users/me
+    // failures and redirects to login), but if something unexpected
+    // does escape here, never leave the page stuck on "Loading…" — show
+    // a real error instead.
+    console.error("[video-generation] Failed to initialize app shell:", err);
+    window.AIAgentToast.show("Could not load the application shell. Please refresh the page.", "error");
+    return;
+  }
   if (!user) return;
 
-  wireReferenceImagePicker();
-  document.getElementById("vid-duration").addEventListener("input", (e) => {
-    document.getElementById("vid-duration-value").textContent = e.target.value;
-  });
-  document.getElementById("vid-generate-btn").addEventListener("click", generateVideo);
+  try {
+    wireReferenceImagePicker();
+    document.getElementById("vid-duration").addEventListener("input", (e) => {
+      document.getElementById("vid-duration-value").textContent = e.target.value;
+    });
+    document.getElementById("vid-generate-btn").addEventListener("click", generateVideo);
 
-  await Promise.all([loadCapability(), window.GenerationCommon.loadProjectOptions("vid-project"), loadVideoJobs()]);
+    // Each widget's loader has its own try/catch (see loadCapability/
+    // loadProjectOptions/loadVideoJobs) and never rejects, but Promise.all
+    // is still wrapped defensively so one truly unexpected failure can
+    // never leave the other two widgets stuck mid-load.
+    await Promise.all([loadCapability(), window.GenerationCommon.loadProjectOptions("vid-project"), loadVideoJobs()]);
+  } catch (err) {
+    console.error("[video-generation] Unexpected error during page initialization:", err);
+    window.AIAgentToast.show("Something went wrong loading this page. Please refresh and try again.", "error");
+  }
 }
 
 init();
