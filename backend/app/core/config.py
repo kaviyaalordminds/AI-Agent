@@ -46,6 +46,12 @@ class Settings(BaseSettings):
     rate_limit_window_minutes: int = 15
     rate_limit_max_requests: int = 10
 
+    # --- Claude provider ---
+    claude_provider: Literal["anthropic"] = "anthropic"
+    anthropic_api_key: str | None = None
+    claude_model: str = "claude-sonnet-5"
+    claude_max_output_tokens: int = 4096
+
     # --- Email provider ---
     email_provider: Literal["console", "smtp"] = "console"
     smtp_host: str | None = None

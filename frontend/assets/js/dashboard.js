@@ -37,9 +37,9 @@ function initCommandInput() {
   });
   function submitCommand() {
     const input = document.getElementById("command-input");
-    if (!input.value.trim()) return;
-    window.AIAgentToast.show("The AI Agent chat engine is planned for a later development phase.", "info");
-    input.value = "";
+    const text = input.value.trim();
+    if (!text) return;
+    window.location.href = `agent.html?prompt=${encodeURIComponent(text)}`;
   }
 }
 
@@ -115,6 +115,23 @@ async function loadDashboardActivity() {
   }
 }
 
+async function loadClaudeStatusWidget() {
+  const statusEl = document.getElementById("dashboard-claude-status");
+  const detailEl = document.getElementById("dashboard-claude-detail");
+  try {
+    const s = await window.AIAgentApi.get("/agent/status");
+    if (s.configured) {
+      statusEl.innerHTML = `<span class="dot dot-success"></span><span style="font-size:0.9rem;">Connected — ${s.model}</span>`;
+      detailEl.textContent = "";
+    } else {
+      statusEl.innerHTML = `<span class="dot dot-muted"></span><span style="font-size:0.9rem;">Not configured</span>`;
+      detailEl.textContent = "Set ANTHROPIC_API_KEY on the backend to enable real AI responses. Configure it from Settings.";
+    }
+  } catch {
+    statusEl.innerHTML = `<span class="dot dot-danger"></span><span style="font-size:0.9rem;">Could not check status</span>`;
+  }
+}
+
 async function init() {
   const user = await window.AppShell.initAppShell("dashboard");
   if (!user) return;
@@ -128,6 +145,7 @@ async function init() {
 
   loadDashboardProjects();
   loadDashboardActivity();
+  loadClaudeStatusWidget();
 }
 
 init();

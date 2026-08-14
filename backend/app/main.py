@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 import app.models  # noqa: F401  (registers all ORM models before first use)
+from app.api.agent.router import router as agent_router
 from app.api.auth.router import router as auth_router
 from app.api.history.router import router as history_router
 from app.api.projects.router import router as projects_router
@@ -59,6 +60,7 @@ app.include_router(auth_router, prefix=settings.api_prefix)
 app.include_router(users_router, prefix=settings.api_prefix)
 app.include_router(projects_router, prefix=settings.api_prefix)
 app.include_router(history_router, prefix=settings.api_prefix)
+app.include_router(agent_router, prefix=settings.api_prefix)
 
 
 @app.get(f"{settings.api_prefix}/health")

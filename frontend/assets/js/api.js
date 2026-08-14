@@ -63,5 +63,7 @@ window.AIAgentApi = {
   post: (path, body) => apiRequest(path, { method: "POST", body }),
   patch: (path, body) => apiRequest(path, { method: "PATCH", body }),
   del: (path) => apiRequest(path, { method: "DELETE" }),
+  getCsrfToken: () => readCookie(CSRF_COOKIE_NAME),
+  apiBase: () => window.AIAgentConfig.apiBase,
   ApiError,
 };

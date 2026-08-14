@@ -16,6 +16,7 @@
 <link rel="stylesheet" href="../assets/css/theme.css">
 <link rel="stylesheet" href="../assets/css/app.css">
 <link rel="stylesheet" href="../assets/css/auth.css">
+<link rel="stylesheet" href="../assets/css/agent.css">
 </head>
 <body>
 
@@ -49,9 +50,9 @@
         <div class="col-lg-3">
           <div class="surface p-3 settings-nav">
             <div class="nav-link-item active" data-settings-tab="general"><i class="bi bi-sliders"></i> General</div>
-            <div class="nav-link-item" data-settings-tab="ai"><i class="bi bi-cpu"></i> AI <span class="nav-link-badge">Soon</span></div>
+            <div class="nav-link-item" data-settings-tab="ai"><i class="bi bi-cpu"></i> AI</div>
             <div class="nav-link-item" data-settings-tab="obsidian"><i class="bi bi-safe2"></i> Obsidian <span class="nav-link-badge">Soon</span></div>
-            <div class="nav-link-item" data-settings-tab="claude"><i class="bi bi-stars"></i> Claude <span class="nav-link-badge">Soon</span></div>
+            <div class="nav-link-item" data-settings-tab="claude"><i class="bi bi-stars"></i> Claude</div>
             <div class="nav-link-item" data-settings-tab="workspace"><i class="bi bi-layout-split"></i> Workspace <span class="nav-link-badge">Soon</span></div>
             <div class="nav-link-item" data-settings-tab="security"><i class="bi bi-shield-lock"></i> Security</div>
             <div class="nav-link-item" data-settings-tab="notifications"><i class="bi bi-bell"></i> Notifications <span class="nav-link-badge">Soon</span></div>
@@ -86,11 +87,10 @@
 
           <div id="tab-ai" class="settings-tab d-none">
             <div class="surface p-4">
-              <div class="empty-state">
-                <div class="empty-icon"><i class="bi bi-cpu"></i></div>
-                <h6>AI provider settings</h6>
-                <p style="font-size:0.85rem;">Claude model/provider selection and agent behavior settings ship with the AI Agent phase. The underlying provider-abstraction architecture (ClaudeProvider) is already in place server-side.</p>
-              </div>
+              <h6 class="mb-3">Agent behavior</h6>
+              <label class="field-label">Default mode for new chats</label>
+              <div class="mode-pill-group" id="ai-default-mode-picker"></div>
+              <p style="font-size:0.78rem; color:var(--text-muted);" class="mt-2 mb-0">Applies the next time you start a new chat from the dashboard. You can still pick a different mode per conversation in AI Chat.</p>
             </div>
           </div>
 
@@ -107,11 +107,23 @@
 
           <div id="tab-claude" class="settings-tab d-none">
             <div class="surface p-4">
-              <div class="empty-state">
-                <div class="empty-icon"><i class="bi bi-stars"></i></div>
-                <h6>Claude configuration</h6>
-                <p style="font-size:0.85rem;">Secure Claude credential configuration and connection testing ship with the AI Agent phase, via the backend's ClaudeProvider abstraction.</p>
+              <h6 class="mb-3">Claude connection</h6>
+              <div id="claude-settings-status" class="d-flex align-items-center gap-2 mb-2">
+                <span class="dot dot-muted"></span>
+                <span style="font-size:0.9rem;">Checking…</span>
               </div>
+              <p id="claude-settings-detail" style="font-size:0.82rem; color:var(--text-muted);"></p>
+              <div class="d-flex gap-2 mt-3">
+                <button type="button" class="btn-ghost" id="claude-test-connection-btn" style="font-size:0.82rem;">
+                  <i class="bi bi-arrow-repeat"></i> Test connection
+                </button>
+              </div>
+              <hr style="border-color: var(--border-subtle);" class="my-3">
+              <p style="font-size:0.78rem; color:var(--text-muted);" class="mb-0">
+                To connect a real Claude account: set <code>ANTHROPIC_API_KEY</code> (and optionally
+                <code>CLAUDE_MODEL</code>, default <code>claude-sonnet-5</code>) as environment variables on
+                the backend, then restart the server. Credentials are never sent to or stored in the browser.
+              </p>
             </div>
           </div>
 

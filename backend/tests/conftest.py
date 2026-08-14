@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+import app.database.session as app_db_session
 import app.models  # noqa: F401
 from app.database.base import Base
 from app.database.session import get_db
@@ -25,6 +26,14 @@ TestingSessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=Fals
 def _clean_database():
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
+    # app.database.session.engine is a *separate* connection pool from the
+    # one above (production code — e.g. the agent chat SSE stream — opens
+    # its own session lazily rather than via the get_db override). Its
+    # pooled connections cache Postgres type OIDs (for our enum columns)
+    # that go stale the moment the tables above are dropped and recreated,
+    # producing "cache lookup failed for type N" errors. Disposing it forces
+    # fresh connections with a fresh type cache on next use.
+    app_db_session.engine.dispose()
     rate_limit._buckets.clear()
     yield
     Base.metadata.drop_all(bind=engine)

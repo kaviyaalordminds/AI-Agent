@@ -9,7 +9,7 @@ const NAV_STRUCTURE = [
     label: "AI Agent",
     items: [
       { key: "dashboard", label: "Home", icon: "bi-house", href: "dashboard.html", enabled: true },
-      { key: "agent", label: "AI Chat", icon: "bi-chat-dots", href: "#", enabled: false },
+      { key: "agent", label: "AI Chat", icon: "bi-chat-dots", href: "agent.html", enabled: true },
     ],
   },
   {

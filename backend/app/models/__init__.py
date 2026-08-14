@@ -3,6 +3,7 @@ registry before relationships (declared as string forward-refs) are
 resolved. Import `app.models` once at startup (main.py does this) before
 using the ORM.
 """
+from app.models.conversation import AgentMode, Conversation, Message, MessageRole  # noqa: F401
 from app.models.history import HistoryEntry, HistoryEntryStatus, HistoryEntryType  # noqa: F401
 from app.models.project import Project, ProjectStatus  # noqa: F401
 from app.models.session import UserSession  # noqa: F401
@@ -21,4 +22,8 @@ __all__ = [
     "HistoryEntry",
     "HistoryEntryType",
     "HistoryEntryStatus",
+    "Conversation",
+    "Message",
+    "AgentMode",
+    "MessageRole",
 ]
