@@ -288,6 +288,11 @@ async function init() {
 
   await loadStatus();
   await loadNotes();
+
+  const deepLinkPath = new URLSearchParams(window.location.search).get("note");
+  if (deepLinkPath) {
+    selectNote(deepLinkPath);
+  }
 }
 
 init();

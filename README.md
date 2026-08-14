@@ -5,7 +5,7 @@ platform. This repository is being built in phases (see **Roadmap**
 below); this README always reflects what's actually implemented, not the
 full end-state vision.
 
-## What's implemented (Phase 1–5: Foundation, Authentication, Core UI, AI Agent & Obsidian)
+## What's implemented (Phase 1–6: Foundation, Authentication, Core UI, AI Agent, Obsidian & Knowledge Intelligence)
 
 - **Backend**: FastAPI (Python), modular `app/` package (`api`, `models`,
   `schemas`, `security`, `services`, `database`, `core`).
@@ -60,6 +60,27 @@ full end-state vision.
   analysis, which are the Knowledge Intelligence phase) instead of saying
   "not built yet". Production points `OBSIDIAN_VAULT_ROOT` at a directory
   of real, synced per-user vaults instead of local storage.
+- **Knowledge Intelligence**: a **Knowledge Center** page with a real,
+  fully deterministic (no LLM) vault health dashboard — duplicate-note
+  detection (identical/similar title, Jaccard-similarity content
+  overlap), outdated-note detection (90-day staleness threshold),
+  broken `[[wiki-link]]` detection, orphan-note detection (no incoming
+  or outgoing links), a transparent/documented health-score formula, and
+  a hand-rolled SVG knowledge graph (a small force-directed layout
+  computed in plain JS — no charting library, no CDN). A **Knowledge
+  Gaps** page runs Claude-backed gap analysis (spec's "what am I missing
+  for a manufacturing HRMS system?" scenario) — it's gated by the same
+  Claude configuration as AI Chat and follows the identical "never lose
+  user input" contract: the query is always persisted, and if Claude
+  isn't configured the analysis is honestly recorded as failed with the
+  real error rather than silently dropped or faked. Every Obsidian note
+  mutation (create/update/append/move/delete) is logged to History as a
+  `knowledge_update` entry — surfaced as "Knowledge Updates" (a deep
+  link into the existing History page, filtered) rather than a
+  duplicate UI. A "Knowledge auto-update policy" preference
+  (Auto/Approval/Smart Auto) is saved in Settings now, ready for the
+  future capability (automatic vault updates proposed by gap analysis)
+  that will read it.
 - **No credit/usage-limit system** — by design, per the product spec.
 - **Provider-abstraction pattern**: `EmailProvider`, `ClaudeProvider`, and
   `ObsidianProvider` establish the pattern the remaining MCP/Storage/
@@ -73,11 +94,13 @@ test suite — nothing here is a mockup or placeholder.
 ### What you'll see marked "planned for a later phase"
 
 The sidebar, dashboard quick-create tiles, and Settings tabs for
-Image/Video/Audio/Document/Website/Design studios, Knowledge Center, and
-Deployments are visibly present (matching the target navigation
-structure) but intentionally disabled — clicking them shows an honest
-"planned for a later development phase" message instead of a fake
-result. Within AI Chat and the project workspace's Chat tab, each mode's
+Image/Video/Audio/Document/Website/Design studios and Deployments are
+visibly present (matching the target navigation structure) but
+intentionally disabled — clicking them shows an honest "planned for a
+later development phase" message instead of a fake result. (Knowledge
+Center, Knowledge Gaps, and Knowledge Updates are real and enabled as of
+Phase 6 — see above.) Within AI Chat and the project workspace's Chat
+tab, each mode's
 system prompt is explicit about which of its described capabilities
 (full knowledge-gap analysis, generation tools, code execution,
 multi-step tool orchestration) aren't wired up yet, rather than the
@@ -101,7 +124,9 @@ CLAUDE_MODEL=claude-sonnet-5   # optional, this is the default
 
 Restart the backend — no code changes required. The Settings → Claude
 tab and the dashboard's Claude Connection widget both reflect the real
-status immediately.
+status immediately. The Knowledge Gaps page reuses this exact same
+provider and configuration — no separate credential is needed for gap
+analysis.
 
 ### Connecting a real Obsidian vault
 
@@ -134,7 +159,7 @@ backend/
     database/            SQLAlchemy engine/session, declarative base
     models/              User, UserSession, UserSettings, EmailVerificationToken,
                           PasswordResetToken, Project, HistoryEntry,
-                          Conversation, Message
+                          Conversation, Message, KnowledgeAnalysis
     schemas/              Pydantic request/response models + validation
     security/             Argon2id hashing, token generation/hashing,
                           session + CSRF dependencies, rate limiting
@@ -146,6 +171,10 @@ backend/
     agents/                per-mode system prompts + orchestrator (chat turn:
                           persist -> build context (project + vault search for
                           Knowledge/Research modes) -> stream -> persist -> log)
+    knowledge/             vault_analysis.py (deterministic duplicate/outdated/
+                          broken-link/orphan detection, health score, graph
+                          builder), gap_analysis.py (Claude-backed gap analysis,
+                          same never-lose-input contract as agents/)
     api/
       auth/               /api/auth/* routes
       users/              /api/users/* routes
@@ -153,24 +182,27 @@ backend/
       history/              /api/history/* routes
       agent/                /api/agent/* routes (conversations, SSE chat, status)
       obsidian/              /api/obsidian/* routes (notes CRUD, search, status)
+      knowledge/             /api/knowledge/* routes (health, graph, gap analyses)
   alembic/                DB migrations
-  tests/                  pytest suite (99 tests, real Postgres, no mocks)
+  tests/                  pytest suite (127 tests, real Postgres, no mocks)
 
 frontend/
   index.html              session-aware redirect (dashboard vs login)
   pages/                  login, signup, forgot/reset password, verify-email,
                           dashboard, profile, settings, projects,
                           project-workspace, history, agent (AI Chat),
-                          obsidian (vault browser)
+                          obsidian (vault browser), knowledge (Knowledge
+                          Center), knowledge-gaps (Knowledge Gaps)
   assets/
     css/                  design tokens (theme.css), auth layout, app shell,
                           workspace-layout.css (full-screen/split-screen),
-                          agent.css (chat UI), obsidian.css (vault browser)
+                          agent.css (chat UI), obsidian.css (vault browser),
+                          knowledge.css (health dashboard, SVG graph, gap results)
     js/                   api client, theme, toast, nav/shell, generic confirm
                           modal, reusable split-screen/full-screen controller,
                           shared history-row renderer, SSE chat client,
-                          minimal safe markdown preview renderer, page
-                          controllers
+                          minimal safe markdown preview renderer, force-directed
+                          SVG knowledge graph renderer, page controllers
     vendor/                vendored Bootstrap 5 + Bootstrap Icons (no CDN
                           dependency — see below)
   components/             (reserved for shared HTML fragments as the app grows)
@@ -256,7 +288,7 @@ cd backend
 .venv/bin/pytest tests/ -v
 ```
 
-99 tests covering signup, duplicate-email/weak-password/mismatch
+127 tests covering signup, duplicate-email/weak-password/mismatch
 rejection, email verification (incl. single-use/expiry), login (incl.
 unverified-account block, wrong password, account lockout), logout,
 logout-all, per-session revocation, forgot/reset password (incl.
@@ -268,14 +300,23 @@ move/delete, the AI Agent module (conversation CRUD, cross-user
 isolation, streamed chat against a fake deterministic provider,
 project-context injection into the system prompt, history logging on
 both success and failure, and a regression test proving a user's
-message is persisted even when Claude isn't configured), and the
-Obsidian module (vault auto-provisioning, full note CRUD, path-traversal
+message is persisted even when Claude isn't configured), the Obsidian
+module (vault auto-provisioning, full note CRUD, path-traversal
 rejection, folder/keyword search and ranking, cross-user vault
 isolation, and — using the same fake-provider pattern as the Claude
 tests — that Knowledge/Research mode chat turns actually inject matching
-vault content into the system prompt while Chat mode does not) — all
-against a real PostgreSQL test database and a real (temp-directory)
-filesystem vault, no mocked ORM and no mocked vault.
+vault content into the system prompt while Chat mode does not), and the
+Knowledge Intelligence module (duplicate/outdated/broken-link/orphan
+detection correctness against constructed vault fixtures, the health-
+score formula's penalty/cap behavior, knowledge-graph node/edge
+construction incl. bidirectional-edge dedup, the `/api/knowledge/health`
+and `/api/knowledge/graph` endpoints reflecting real vault state, Obsidian
+mutations logging real `knowledge_update` History entries, and gap
+analysis's honest not-configured path plus a fake-provider structured-
+response-parsing path proving the query is never lost even when the
+in-stream call fails) — all against a real PostgreSQL test database and
+a real (temp-directory) filesystem vault, no mocked ORM and no mocked
+vault.
 
 There is deliberately no test that calls a real Anthropic API: this
 deployment has no `ANTHROPIC_API_KEY` configured (see "Configuring a
@@ -291,7 +332,7 @@ This repo follows the phased plan from the product spec:
 3. ✅ **Core UI** — reusable full-screen/split-screen workspace shell, history, projects UI
 4. ✅ **AI Agent** — Claude provider, orchestrator, chat, streaming, 7 modes (tool-calling architecture still to come)
 5. ✅ **Obsidian** — per-user vault, search/read/create/update/append/move/delete, connection status, Knowledge/Research mode grounding (MCP/REST bridge to a live Obsidian.app instance is a possible future provider — the current one operates directly on vault files, which is what a live Obsidian instance is backed by anyway)
-6. ⬜ **Knowledge Intelligence** — gap/duplicate/outdated detection, knowledge graph, auto-update policies
+6. ✅ **Knowledge Intelligence** — gap/duplicate/outdated/broken-link/orphan detection, health score, knowledge graph, Claude-backed gap analysis, knowledge-update history, auto-update policy setting (Auto/Approval/Smart Auto — saved now, ready for the future automatic-apply capability)
 7. ⬜ **Creative tools** — image/audio/video/document/design generation
 8. ⬜ **Developer Studio** — website/3D website generation, live preview, deployment
 9. ⬜ **Integration** — projects ↔ knowledge ↔ history ↔ files ↔ AI context ↔ activity log

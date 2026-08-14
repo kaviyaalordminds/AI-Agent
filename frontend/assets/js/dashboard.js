@@ -149,6 +149,28 @@ async function loadObsidianStatusWidget() {
   }
 }
 
+async function loadKnowledgeWidget() {
+  const summary = document.getElementById("knowledge-summary");
+  const empty = document.getElementById("knowledge-empty");
+  try {
+    const s = await window.AIAgentApi.get("/knowledge/health");
+    empty.classList.add("d-none");
+    summary.classList.remove("d-none");
+    const dot = document.getElementById("knowledge-health-dot");
+    dot.className = `dot ${s.health_score >= 80 ? "dot-success" : s.health_score >= 50 ? "dot-muted" : "dot-danger"}`;
+    document.getElementById("knowledge-health-text").textContent = `Health score ${s.health_score}% — ${s.note_count} notes`;
+    const issues = [];
+    if (s.duplicates.length) issues.push(`${s.duplicates.length} duplicate${s.duplicates.length === 1 ? "" : "s"}`);
+    if (s.outdated.length) issues.push(`${s.outdated.length} outdated`);
+    if (s.broken_links.length) issues.push(`${s.broken_links.length} broken link${s.broken_links.length === 1 ? "" : "s"}`);
+    document.getElementById("knowledge-health-detail").textContent = issues.length
+      ? issues.join(" · ")
+      : "No issues found.";
+  } catch {
+    empty.querySelector("p").textContent = "Could not check knowledge health.";
+  }
+}
+
 async function init() {
   const user = await window.AppShell.initAppShell("dashboard");
   if (!user) return;
@@ -164,6 +186,7 @@ async function init() {
   loadDashboardActivity();
   loadClaudeStatusWidget();
   loadObsidianStatusWidget();
+  loadKnowledgeWidget();
 }
 
 init();

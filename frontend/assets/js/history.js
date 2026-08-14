@@ -128,6 +128,12 @@ async function init() {
   if (!user) return;
 
   initFilters();
+
+  const typeFromUrl = new URLSearchParams(window.location.search).get("type");
+  if (typeFromUrl) {
+    document.getElementById("history-type-filter").value = typeFromUrl;
+  }
+
   await loadProjectFilterOptions();
   loadHistory();
 }

@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Knowledge Gaps · AI Agent Platform</title>
+<script>
+  (function () {
+    var theme = localStorage.getItem("aiagent:theme") || "dark";
+    document.documentElement.setAttribute("data-theme", theme);
+  })();
+</script>
+<link rel="icon" type="image/svg+xml" href="../assets/images/favicon.svg">
+<link rel="stylesheet" href="../assets/vendor/bootstrap/css/bootstrap.min.css">
+<link rel="stylesheet" href="../assets/vendor/bootstrap-icons/bootstrap-icons.min.css">
+<link rel="stylesheet" href="../assets/css/theme.css">
+<link rel="stylesheet" href="../assets/css/app.css">
+<link rel="stylesheet" href="../assets/css/agent.css">
+<link rel="stylesheet" href="../assets/css/knowledge.css">
+</head>
+<body>
+
+<div class="app-shell">
+  <aside class="app-sidebar" id="app-sidebar"></aside>
+
+  <div class="app-main">
+    <header class="app-topbar">
+      <div class="d-flex align-items-center gap-3">
+        <button type="button" class="sidebar-collapse-btn d-md-none" id="mobile-sidebar-toggle"><i class="bi bi-list"></i></button>
+        <h5 class="mb-0">Knowledge Gaps</h5>
+        <span class="badge-pill badge-muted" id="claude-status-badge"><span class="dot dot-muted"></span> Checking…</span>
+      </div>
+      <div class="d-flex align-items-center gap-3">
+        <div class="theme-toggle" data-theme-toggle>
+          <button type="button" data-theme-value="light" title="Light theme"><i class="bi bi-sun"></i></button>
+          <button type="button" data-theme-value="dark" title="Dark theme"><i class="bi bi-moon-stars"></i></button>
+        </div>
+        <div class="user-menu-trigger" onclick="window.location.href='profile.html'">
+          <div class="avatar-circle" id="topbar-user-avatar">--</div>
+          <div class="d-none d-sm-block">
+            <div style="font-size:0.85rem; font-weight:600;" id="topbar-user-name">Loading…</div>
+            <div style="font-size:0.72rem; color:var(--text-muted);" id="topbar-user-email"></div>
+          </div>
+        </div>
+        <button type="button" class="btn-ghost" id="topbar-logout-btn" title="Log out"><i class="bi bi-box-arrow-right"></i></button>
+      </div>
+    </header>
+
+    <main class="app-content">
+      <div id="provider-banner" class="agent-provider-banner d-none">
+        <i class="bi bi-exclamation-triangle-fill"></i>
+        <span id="provider-banner-text"></span>
+      </div>
+
+      <div class="knowledge-columns">
+        <div>
+          <div class="surface p-4 knowledge-gap-form">
+            <h6 class="mb-3">Ask what you're missing</h6>
+            <label class="field-label" for="gap-query">Describe what you're building or working on</label>
+            <textarea class="form-control-premium" id="gap-query" placeholder="e.g. What am I missing for a manufacturing HRMS system?"></textarea>
+            <div class="field-error" data-error-for="query"></div>
+            <div class="mb-3 mt-2" id="gap-project-wrap">
+              <label class="field-label" for="gap-project">Project <span style="font-weight:400; color:var(--text-muted);">(optional)</span></label>
+              <select class="form-control-premium" id="gap-project">
+                <option value="">No project</option>
+              </select>
+            </div>
+            <button type="button" class="btn-brand" id="gap-analyze-btn"><i class="bi bi-search"></i> Analyze</button>
+          </div>
+
+          <div class="surface p-4 mt-4" id="gap-result-panel" style="display:none;">
+            <div class="d-flex align-items-center justify-content-between mb-3">
+              <h6 class="mb-0" id="gap-result-title">Analysis</h6>
+              <span class="badge-pill" id="gap-result-status"></span>
+            </div>
+            <div id="gap-result-body"></div>
+          </div>
+
+          <div id="gap-empty-state" class="empty-state">
+            <div class="empty-icon"><i class="bi bi-search"></i></div>
+            <h5>No analysis yet</h5>
+            <p style="font-size:0.85rem;">Describe a project or topic above and see what your vault already covers vs. what's missing.</p>
+          </div>
+        </div>
+
+        <div class="surface p-4">
+          <h6 class="mb-3">Past analyses</h6>
+          <div id="gap-history-list">
+            <div class="skeleton mb-2" style="height:56px; border-radius:10px;"></div>
+            <div class="skeleton" style="height:56px; border-radius:10px;"></div>
+          </div>
+          <div id="gap-history-empty" class="empty-state d-none" style="padding:1.5rem 0.5rem;">
+            <div class="empty-icon"><i class="bi bi-clock-history"></i></div>
+            <h6>No past analyses</h6>
+            <p style="font-size:0.82rem;">Analyses you run will be listed here for later reference.</p>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script src="../assets/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
+<script src="../assets/js/config.js"></script>
+<script src="../assets/js/api.js"></script>
+<script src="../assets/js/theme.js"></script>
+<script src="../assets/js/toast.js"></script>
+<script src="../assets/js/nav.js"></script>
+<script src="../assets/js/modals.js"></script>
+<script src="../assets/js/knowledge-gaps.js"></script>
+</body>
+</html>

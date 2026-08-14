@@ -119,11 +119,20 @@
           </div>
 
           <div class="surface p-4">
-            <h6 class="mb-3">Knowledge Intelligence</h6>
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <h6 class="mb-0">Knowledge Intelligence</h6>
+              <a href="knowledge.html" class="btn-ghost" style="font-size:0.78rem; padding:0.35rem 0.7rem;">Open</a>
+            </div>
+            <div id="knowledge-summary" class="d-none">
+              <div class="d-flex align-items-center gap-2 mb-2">
+                <span class="dot" id="knowledge-health-dot"></span>
+                <span style="font-size:0.9rem;" id="knowledge-health-text"></span>
+              </div>
+              <p style="font-size:0.8rem; color:var(--text-muted);" class="mb-0" id="knowledge-health-detail"></p>
+            </div>
             <div class="empty-state" id="knowledge-empty" style="padding: 1.5rem 0.5rem;">
               <div class="empty-icon"><i class="bi bi-diagram-3"></i></div>
-              <p class="mb-0">Not available yet.</p>
-              <p style="font-size:0.82rem;">Knowledge gap/duplicate/outdated detection ships with the Knowledge Intelligence phase.</p>
+              <p class="mb-0">Checking…</p>
             </div>
           </div>
         </div>

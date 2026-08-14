@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Knowledge Center · AI Agent Platform</title>
+<script>
+  (function () {
+    var theme = localStorage.getItem("aiagent:theme") || "dark";
+    document.documentElement.setAttribute("data-theme", theme);
+  })();
+</script>
+<link rel="icon" type="image/svg+xml" href="../assets/images/favicon.svg">
+<link rel="stylesheet" href="../assets/vendor/bootstrap/css/bootstrap.min.css">
+<link rel="stylesheet" href="../assets/vendor/bootstrap-icons/bootstrap-icons.min.css">
+<link rel="stylesheet" href="../assets/css/theme.css">
+<link rel="stylesheet" href="../assets/css/app.css">
+<link rel="stylesheet" href="../assets/css/knowledge.css">
+</head>
+<body>
+
+<div class="app-shell">
+  <aside class="app-sidebar" id="app-sidebar"></aside>
+
+  <div class="app-main">
+    <header class="app-topbar">
+      <div class="d-flex align-items-center gap-3">
+        <button type="button" class="sidebar-collapse-btn d-md-none" id="mobile-sidebar-toggle"><i class="bi bi-list"></i></button>
+        <h5 class="mb-0">Knowledge Center</h5>
+      </div>
+      <div class="d-flex align-items-center gap-3">
+        <button type="button" class="btn-ghost knowledge-refresh-btn" id="knowledge-refresh-btn"><i class="bi bi-arrow-clockwise"></i> Refresh</button>
+        <div class="theme-toggle" data-theme-toggle>
+          <button type="button" data-theme-value="light" title="Light theme"><i class="bi bi-sun"></i></button>
+          <button type="button" data-theme-value="dark" title="Dark theme"><i class="bi bi-moon-stars"></i></button>
+        </div>
+        <div class="user-menu-trigger" onclick="window.location.href='profile.html'">
+          <div class="avatar-circle" id="topbar-user-avatar">--</div>
+          <div class="d-none d-sm-block">
+            <div style="font-size:0.85rem; font-weight:600;" id="topbar-user-name">Loading…</div>
+            <div style="font-size:0.72rem; color:var(--text-muted);" id="topbar-user-email"></div>
+          </div>
+        </div>
+        <button type="button" class="btn-ghost" id="topbar-logout-btn" title="Log out"><i class="bi bi-box-arrow-right"></i></button>
+      </div>
+    </header>
+
+    <main class="app-content">
+      <div id="knowledge-loading" class="knowledge-stat-grid">
+        <div class="surface stat-card skeleton" style="height:86px;"></div>
+        <div class="surface stat-card skeleton" style="height:86px;"></div>
+        <div class="surface stat-card skeleton" style="height:86px;"></div>
+        <div class="surface stat-card skeleton" style="height:86px;"></div>
+      </div>
+
+      <div id="knowledge-body" class="d-none">
+        <div class="knowledge-stat-grid" id="knowledge-stats"></div>
+
+        <div class="knowledge-columns">
+          <div>
+            <div class="surface p-4">
+              <h6 class="mb-3">Vault issues</h6>
+              <div id="knowledge-issues"></div>
+              <div id="knowledge-issues-empty" class="empty-state d-none" style="padding:1.5rem 0.5rem;">
+                <div class="empty-icon"><i class="bi bi-patch-check"></i></div>
+                <h6>No issues found</h6>
+                <p style="font-size:0.82rem;">Your vault has no duplicates, stale notes, broken links, or orphans.</p>
+              </div>
+            </div>
+
+            <div class="surface p-4 mt-4">
+              <div class="d-flex align-items-center justify-content-between mb-3">
+                <h6 class="mb-0">Recent knowledge updates</h6>
+                <a href="history.html?type=knowledge_update" style="font-size:0.8rem;">View all</a>
+              </div>
+              <div id="knowledge-updates-list"></div>
+              <div id="knowledge-updates-empty" class="empty-state d-none" style="padding:1.5rem 0.5rem;">
+                <div class="empty-icon"><i class="bi bi-arrow-repeat"></i></div>
+                <h6>No updates yet</h6>
+                <p style="font-size:0.82rem;">Creating, editing, or organizing notes will show up here.</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="surface p-4">
+            <div class="d-flex align-items-center justify-content-between mb-3">
+              <h6 class="mb-0">Knowledge graph</h6>
+              <span style="font-size:0.76rem; color:var(--text-muted);" id="graph-node-count"></span>
+            </div>
+            <div class="knowledge-graph-wrap" id="knowledge-graph-wrap">
+              <svg id="knowledge-graph-svg"></svg>
+            </div>
+            <div id="knowledge-graph-empty" class="empty-state d-none" style="padding:1.5rem 0.5rem;">
+              <div class="empty-icon"><i class="bi bi-diagram-3"></i></div>
+              <h6>Nothing to visualize yet</h6>
+              <p style="font-size:0.82rem;">Add notes with <code>[[wiki links]]</code> in Obsidian to see them connected here.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script src="../assets/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
+<script src="../assets/js/config.js"></script>
+<script src="../assets/js/api.js"></script>
+<script src="../assets/js/theme.js"></script>
+<script src="../assets/js/toast.js"></script>
+<script src="../assets/js/nav.js"></script>
+<script src="../assets/js/modals.js"></script>
+<script src="../assets/js/history-common.js"></script>
+<script src="../assets/js/knowledge.js"></script>
+</body>
+</html>

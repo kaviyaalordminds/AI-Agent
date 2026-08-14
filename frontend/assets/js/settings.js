@@ -8,6 +8,27 @@ const SETTINGS_MODES = [
   { key: "automation", label: "Automation", icon: "bi-gear-wide-connected" },
 ];
 
+const KNOWLEDGE_UPDATE_POLICIES = [
+  {
+    key: "auto",
+    label: "Auto",
+    icon: "bi-lightning-charge",
+    desc: "Apply proposed vault updates automatically.",
+  },
+  {
+    key: "approval",
+    label: "Approval",
+    icon: "bi-hand-index-thumb",
+    desc: "Always ask before any vault update is applied.",
+  },
+  {
+    key: "smart_auto",
+    label: "Smart Auto",
+    icon: "bi-stars",
+    desc: "Apply low-risk updates automatically; ask before anything destructive.",
+  },
+];
+
 function switchSettingsTab(tabKey) {
   document.querySelectorAll("[data-settings-tab]").forEach((el) => {
     el.classList.toggle("active", el.dataset.settingsTab === tabKey);
@@ -93,9 +114,8 @@ function initAiTab(settings) {
       btn.addEventListener("click", async () => {
         render(btn.dataset.mode);
         try {
-          await window.AIAgentApi.patch("/users/me/settings", {
-            ai_settings: { ...(settings.ai_settings || {}), default_mode: btn.dataset.mode },
-          });
+          settings.ai_settings = { ...(settings.ai_settings || {}), default_mode: btn.dataset.mode };
+          await window.AIAgentApi.patch("/users/me/settings", { ai_settings: settings.ai_settings });
           window.AIAgentToast.show("Default mode saved.", "success");
         } catch (err) {
           window.AIAgentToast.show(err.message, "error");
@@ -104,6 +124,31 @@ function initAiTab(settings) {
     });
   }
   render(defaultMode);
+
+  const policyPicker = document.getElementById("ai-knowledge-policy-picker");
+  const policyDesc = document.getElementById("ai-knowledge-policy-desc");
+  const knowledgePolicy = (settings.ai_settings && settings.ai_settings.knowledge_update_policy) || "smart_auto";
+
+  function renderPolicy(selected) {
+    const active = KNOWLEDGE_UPDATE_POLICIES.find((p) => p.key === selected) || KNOWLEDGE_UPDATE_POLICIES[2];
+    policyPicker.innerHTML = KNOWLEDGE_UPDATE_POLICIES.map(
+      (p) => `<button type="button" class="mode-pill ${p.key === selected ? "active" : ""}" data-policy="${p.key}"><i class="bi ${p.icon}"></i> ${p.label}</button>`
+    ).join("");
+    policyDesc.textContent = `${active.desc} Saved now — applies once the agent can propose automatic vault updates from Knowledge Gap analysis (planned).`;
+    policyPicker.querySelectorAll("[data-policy]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        renderPolicy(btn.dataset.policy);
+        try {
+          settings.ai_settings = { ...(settings.ai_settings || {}), knowledge_update_policy: btn.dataset.policy };
+          await window.AIAgentApi.patch("/users/me/settings", { ai_settings: settings.ai_settings });
+          window.AIAgentToast.show("Knowledge auto-update policy saved.", "success");
+        } catch (err) {
+          window.AIAgentToast.show(err.message, "error");
+        }
+      });
+    });
+  }
+  renderPolicy(knowledgePolicy);
 }
 
 async function loadClaudeStatus() {
