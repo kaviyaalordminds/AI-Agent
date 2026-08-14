@@ -24,12 +24,23 @@ class Settings(BaseSettings):
     app_env: Environment = "development"
     debug: bool = True
     api_prefix: str = "/api"
+    # frontend_url drives the CORS allow-list (see main.py) and MUST match
+    # the exact origin the browser opens the frontend from — "localhost"
+    # and "127.0.0.1" are different origins for CORS purposes even though
+    # both point at the same machine, so this intentionally stays
+    # "localhost" to match `python -m http.server` served at
+    # http://localhost:5173 (the documented dev setup). If you open the
+    # frontend at http://127.0.0.1:5173 instead, set FRONTEND_URL to match.
     frontend_url: str = "http://localhost:5173"
-    backend_url: str = "http://localhost:8000"
+    backend_url: str = "http://127.0.0.1:8000"
 
     # --- Database (PostgreSQL) ---
+    # Same reasoning as above: 127.0.0.1 avoids "localhost" resolution
+    # being slow on some Windows setups, which can otherwise make every
+    # DB-backed request (including login) take many seconds or appear to
+    # hang.
     database_url: str = Field(
-        default="postgresql+psycopg://ai_agent:ai_agent@localhost:5432/ai_agent_dev"
+        default="postgresql+psycopg://ai_agent:ai_agent@127.0.0.1:5432/ai_agent_dev"
     )
 
     # --- Security / Sessions ---
