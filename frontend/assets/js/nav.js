@@ -18,7 +18,7 @@ const NAV_STRUCTURE = [
       { key: "image", label: "Image", icon: "bi-image", href: "#", enabled: false },
       { key: "audio", label: "Audio", icon: "bi-mic", href: "#", enabled: false },
       { key: "video", label: "Video", icon: "bi-camera-reels", href: "#", enabled: false },
-      { key: "documents", label: "Documents", icon: "bi-file-earmark-text", href: "#", enabled: false },
+      { key: "documents", label: "Documents", icon: "bi-file-earmark-text", href: "documents.html", enabled: true },
       { key: "presentations", label: "Presentations", icon: "bi-easel", href: "#", enabled: false },
       { key: "website", label: "Website", icon: "bi-globe", href: "#", enabled: false },
       { key: "website3d", label: "3D Website", icon: "bi-badge-3d", href: "#", enabled: false },

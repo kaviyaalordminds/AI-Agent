@@ -37,6 +37,20 @@ def _obsidian_vault_tmp(tmp_path):
 
 
 @pytest.fixture(autouse=True)
+def _storage_root_tmp(tmp_path):
+    """Each test gets its own throwaway storage root, so generated-asset
+    tests never touch the real storage/ directory or leak state between
+    tests (same isolation strategy as _obsidian_vault_tmp above)."""
+    from app.core.config import get_settings
+
+    settings = get_settings()
+    original = settings.storage_root
+    settings.storage_root = str(tmp_path / "storage")
+    yield
+    settings.storage_root = original
+
+
+@pytest.fixture(autouse=True)
 def _clean_database():
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)

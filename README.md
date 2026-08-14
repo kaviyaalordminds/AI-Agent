@@ -5,7 +5,7 @@ platform. This repository is being built in phases (see **Roadmap**
 below); this README always reflects what's actually implemented, not the
 full end-state vision.
 
-## What's implemented (Phase 1–6: Foundation, Authentication, Core UI, AI Agent, Obsidian & Knowledge Intelligence)
+## What's implemented (Phase 1–7: Foundation, Authentication, Core UI, AI Agent, Obsidian, Knowledge Intelligence & Document Generation)
 
 - **Backend**: FastAPI (Python), modular `app/` package (`api`, `models`,
   `schemas`, `security`, `services`, `database`, `core`).
@@ -81,11 +81,31 @@ full end-state vision.
   (Auto/Approval/Smart Auto) is saved in Settings now, ready for the
   future capability (automatic vault updates proposed by gap analysis)
   that will read it.
+- **Document Generation** (Phase 7's first Creative Studio module): a real
+  **Documents** page drafts a document via Claude, then renders it to an
+  actually-openable Markdown/.docx/.pdf file (`python-docx`/`reportlab` —
+  real conversion, not a placeholder or renamed .txt) and stores it
+  through the new `StorageProvider` abstraction. Gated by Claude
+  configuration exactly like AI Chat and Knowledge Gaps: the prompt is
+  always persisted first, and an unconfigured/failed Claude call is
+  recorded honestly as a failed document with the real error rather than
+  faked or dropped — **this module, and the rest of Phase 7, works fully
+  whether or not `ANTHROPIC_API_KEY` is set; a missing key never blocks
+  new phases, it only means document *drafting* itself stays gated until
+  a real key is added.**
+- **StorageProvider abstraction**: `LocalStorageProvider` (real files
+  under `storage/`, category+owner-namespaced, path-traversal protected)
+  is the first implementation — the interface is what Document Generation
+  (and future Image/Video/Audio generation) writes through, so a future
+  S3/GCS-backed provider drops in without touching call sites. Generated
+  file references (never raw filesystem paths) are the only thing that
+  ever reaches Postgres or the API response.
 - **No credit/usage-limit system** — by design, per the product spec.
-- **Provider-abstraction pattern**: `EmailProvider`, `ClaudeProvider`, and
-  `ObsidianProvider` establish the pattern the remaining MCP/Storage/
-  Deployment integrations will follow — application code never talks to
-  a vendor SDK, external API, or the filesystem directly.
+- **Provider-abstraction pattern**: `EmailProvider`, `ClaudeProvider`,
+  `ObsidianProvider`, and `StorageProvider` establish the pattern the
+  remaining MCP/Image/Video/Audio/Deployment integrations will follow —
+  application code never talks to a vendor SDK, external API, or the
+  filesystem directly.
 
 Everything above is fully wired end-to-end (frontend ↔ backend ↔
 database ↔ Claude API ↔ vault filesystem) and covered by an automated
@@ -94,13 +114,13 @@ test suite — nothing here is a mockup or placeholder.
 ### What you'll see marked "planned for a later phase"
 
 The sidebar, dashboard quick-create tiles, and Settings tabs for
-Image/Video/Audio/Document/Website/Design studios and Deployments are
-visibly present (matching the target navigation structure) but
-intentionally disabled — clicking them shows an honest "planned for a
-later development phase" message instead of a fake result. (Knowledge
-Center, Knowledge Gaps, and Knowledge Updates are real and enabled as of
-Phase 6 — see above.) Within AI Chat and the project workspace's Chat
-tab, each mode's
+Image/Video/Audio/Website/Design studios and Deployments are visibly
+present (matching the target navigation structure) but intentionally
+disabled — clicking them shows an honest "planned for a later
+development phase" message instead of a fake result. (Knowledge Center,
+Knowledge Gaps, and Knowledge Updates are real and enabled as of Phase
+6; Documents is real and enabled as of Phase 7 — see above.) Within AI
+Chat and the project workspace's Chat tab, each mode's
 system prompt is explicit about which of its described capabilities
 (full knowledge-gap analysis, generation tools, code execution,
 multi-step tool orchestration) aren't wired up yet, rather than the
@@ -124,9 +144,19 @@ CLAUDE_MODEL=claude-sonnet-5   # optional, this is the default
 
 Restart the backend — no code changes required. The Settings → Claude
 tab and the dashboard's Claude Connection widget both reflect the real
-status immediately. The Knowledge Gaps page reuses this exact same
-provider and configuration — no separate credential is needed for gap
-analysis.
+status immediately. The Knowledge Gaps and Documents pages reuse this
+exact same provider and configuration — no separate credential is
+needed for gap analysis or document drafting.
+
+**A missing `ANTHROPIC_API_KEY` never blocks development of new
+phases.** The provider is constructed lazily, inside a `try/except
+ProviderNotConfiguredError`, at the one call site each feature needs it
+— never at app startup — so the backend always starts cleanly and every
+other module (auth, projects, history, Obsidian, Knowledge Intelligence,
+Documents) works fully regardless of Claude's configuration state. Only
+the actual drafting/generation step inside AI Chat, Knowledge Gaps, and
+Documents is gated, and it fails honestly (persisting the user's input
+first) rather than faking a response.
 
 ### Connecting a real Obsidian vault
 
@@ -159,15 +189,18 @@ backend/
     database/            SQLAlchemy engine/session, declarative base
     models/              User, UserSession, UserSettings, EmailVerificationToken,
                           PasswordResetToken, Project, HistoryEntry,
-                          Conversation, Message, KnowledgeAnalysis
+                          Conversation, Message, KnowledgeAnalysis, Document
     schemas/              Pydantic request/response models + validation
     security/             Argon2id hashing, token generation/hashing,
                           session + CSRF dependencies, rate limiting
     services/email/       EmailProvider abstraction (console/SMTP + factory)
     integrations/
-      claude/               ClaudeProvider abstraction (Anthropic API + factory)
+      claude/               ClaudeProvider abstraction (Anthropic API + factory
+                            + utils.complete() shared stream-to-string helper)
       obsidian/              ObsidianProvider abstraction (LocalVaultProvider,
                             markdown tag/link parsing, path-safety + factory)
+      storage/               StorageProvider abstraction (LocalStorageProvider,
+                            category+owner-namespaced, path-safety + factory)
     agents/                per-mode system prompts + orchestrator (chat turn:
                           persist -> build context (project + vault search for
                           Knowledge/Research modes) -> stream -> persist -> log)
@@ -175,6 +208,9 @@ backend/
                           broken-link/orphan detection, health score, graph
                           builder), gap_analysis.py (Claude-backed gap analysis,
                           same never-lose-input contract as agents/)
+    documents/              generator.py (Claude-drafted content -> render ->
+                          StorageProvider, same never-lose-input contract),
+                          render.py (real markdown -> docx/pdf conversion)
     api/
       auth/               /api/auth/* routes
       users/              /api/users/* routes
@@ -183,8 +219,9 @@ backend/
       agent/                /api/agent/* routes (conversations, SSE chat, status)
       obsidian/              /api/obsidian/* routes (notes CRUD, search, status)
       knowledge/             /api/knowledge/* routes (health, graph, gap analyses)
+      documents/              /api/documents/* routes (create/list/get/download/delete)
   alembic/                DB migrations
-  tests/                  pytest suite (127 tests, real Postgres, no mocks)
+  tests/                  pytest suite (151 tests, real Postgres, no mocks)
 
 frontend/
   index.html              session-aware redirect (dashboard vs login)
@@ -192,12 +229,14 @@ frontend/
                           dashboard, profile, settings, projects,
                           project-workspace, history, agent (AI Chat),
                           obsidian (vault browser), knowledge (Knowledge
-                          Center), knowledge-gaps (Knowledge Gaps)
+                          Center), knowledge-gaps (Knowledge Gaps), documents
+                          (Documents Studio)
   assets/
     css/                  design tokens (theme.css), auth layout, app shell,
                           workspace-layout.css (full-screen/split-screen),
                           agent.css (chat UI), obsidian.css (vault browser),
-                          knowledge.css (health dashboard, SVG graph, gap results)
+                          knowledge.css (health dashboard, SVG graph, gap results),
+                          documents.css (draft form, format picker, file list)
     js/                   api client, theme, toast, nav/shell, generic confirm
                           modal, reusable split-screen/full-screen controller,
                           shared history-row renderer, SSE chat client,
@@ -210,7 +249,10 @@ frontend/
 storage/
   obsidian_vaults/         default per-user vault root (see "Connecting a
                           real Obsidian vault" above)
-  images/videos/audio/…    generated-asset root for the future StorageProvider
+  documents/{user_id}/…    real generated .md/.docx/.pdf files, written
+                          through StorageProvider (Phase 7)
+  images/videos/audio/…    generated-asset roots for future Image/Video/
+                          Audio generation phases, same StorageProvider
 docker-compose.yml        local PostgreSQL for development
 ```
 
@@ -223,13 +265,15 @@ vendored under `frontend/assets/vendor/` (~700KB) instead.
 
 ### Hybrid storage model (per spec)
 
-- **PostgreSQL** — users, sessions, tokens, and (in later phases)
-  projects, chat history, generation history, job status, file
-  *metadata*, deployment metadata.
-- **Filesystem (`storage/`)** — the actual generated binary assets.
-  Postgres stores a reference, never the blob.
-- **Obsidian** (later phase) — the knowledge layer: notes, research,
-  project documentation, AI memory. Never used as a database substitute.
+- **PostgreSQL** — users, sessions, tokens, projects, chat history,
+  generation history, and (as of Phase 7) `documents` rows: prompt,
+  drafted content, status/error, and a `StorageProvider` reference —
+  never the file's bytes.
+- **Filesystem (`storage/`)**, via `StorageProvider` — the actual
+  generated binary assets (currently: generated documents). Postgres
+  stores a reference, never the blob.
+- **Obsidian** — the knowledge layer: notes, research, project
+  documentation, AI memory. Never used as a database substitute.
 
 ### Provider abstraction / credential-agnosticism
 
@@ -288,7 +332,7 @@ cd backend
 .venv/bin/pytest tests/ -v
 ```
 
-127 tests covering signup, duplicate-email/weak-password/mismatch
+151 tests covering signup, duplicate-email/weak-password/mismatch
 rejection, email verification (incl. single-use/expiry), login (incl.
 unverified-account block, wrong password, account lockout), logout,
 logout-all, per-session revocation, forgot/reset password (incl.
@@ -314,9 +358,16 @@ and `/api/knowledge/graph` endpoints reflecting real vault state, Obsidian
 mutations logging real `knowledge_update` History entries, and gap
 analysis's honest not-configured path plus a fake-provider structured-
 response-parsing path proving the query is never lost even when the
-in-stream call fails) — all against a real PostgreSQL test database and
-a real (temp-directory) filesystem vault, no mocked ORM and no mocked
-vault.
+in-stream call fails), and the Document Generation module
+(`LocalStorageProvider` write/read/delete round-trips, path-traversal
+rejection, per-owner isolation on disk; the markdown block parser and
+real docx/pdf rendering, including empty-content edge cases; and the
+`/api/documents/*` endpoints' honest not-configured path, a fake-provider
+success path verified for all three formats — markdown, real .docx
+zip/PDF magic bytes — download content-type/filename correctness,
+cross-user ownership isolation, and `document` History logging) — all
+against a real PostgreSQL test database and a real (temp-directory)
+filesystem vault/storage root, no mocked ORM and no mocked filesystem.
 
 There is deliberately no test that calls a real Anthropic API: this
 deployment has no `ANTHROPIC_API_KEY` configured (see "Configuring a
@@ -333,7 +384,7 @@ This repo follows the phased plan from the product spec:
 4. ✅ **AI Agent** — Claude provider, orchestrator, chat, streaming, 7 modes (tool-calling architecture still to come)
 5. ✅ **Obsidian** — per-user vault, search/read/create/update/append/move/delete, connection status, Knowledge/Research mode grounding (MCP/REST bridge to a live Obsidian.app instance is a possible future provider — the current one operates directly on vault files, which is what a live Obsidian instance is backed by anyway)
 6. ✅ **Knowledge Intelligence** — gap/duplicate/outdated/broken-link/orphan detection, health score, knowledge graph, Claude-backed gap analysis, knowledge-update history, auto-update policy setting (Auto/Approval/Smart Auto — saved now, ready for the future automatic-apply capability)
-7. ⬜ **Creative tools** — image/audio/video/document/design generation
+7. 🟡 **Creative tools** — image/audio/video/document/design generation. **Document generation is done**: Claude-drafted content rendered to real Markdown/.docx/.pdf via `StorageProvider`, gated honestly by Claude configuration (see above). The new `StorageProvider` abstraction this introduced is what Image/Audio/Video generation will write through next. Image/Audio/Video/Website/3D Website/Poster/Logo/Graphic Design generation remain ⬜ — each needs its own real external generation API (OpenAI Images, Stability AI, ElevenLabs, etc.), architected the same way Claude is: a provider interface + factory, built and ready to configure, honestly "not configured" until real credentials are added.
 8. ⬜ **Developer Studio** — website/3D website generation, live preview, deployment
 9. ⬜ **Integration** — projects ↔ knowledge ↔ history ↔ files ↔ AI context ↔ activity log
 10. ⬜ **Testing** — expanded integration/E2E/security test coverage

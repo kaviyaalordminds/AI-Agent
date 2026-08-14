@@ -14,8 +14,9 @@ import re
 from sqlalchemy.orm import Session
 
 from app.database.base import utcnow
-from app.integrations.claude.base import ClaudeMessage, ClaudeProvider
+from app.integrations.claude.base import ClaudeProvider
 from app.integrations.claude.errors import ProviderRequestError
+from app.integrations.claude.utils import complete
 from app.integrations.obsidian.base import ObsidianProvider
 from app.models.history import HistoryEntry, HistoryEntryStatus, HistoryEntryType
 from app.models.knowledge_analysis import KnowledgeAnalysis, KnowledgeAnalysisStatus
@@ -55,13 +56,6 @@ Be concrete and specific to the stated request's domain. Do not claim the
 user's vault contains something it wasn't shown to contain."""
 
 _SECTION_ORDER = ["EXISTING", "MISSING", "RECOMMENDED", "DUPLICATES", "OUTDATED"]
-
-
-async def _complete(provider: ClaudeProvider, message: str, system_prompt: str) -> str:
-    full_text = ""
-    async for delta in provider.stream([ClaudeMessage(role="user", content=message)], system_prompt):
-        full_text += delta
-    return full_text
 
 
 def _parse_response(raw: str) -> dict[str, list[str]]:
@@ -127,7 +121,7 @@ async def run_gap_analysis(
     message = f"Request: {query}\n\nRelated notes already in the vault:\n\n{context}"
 
     try:
-        raw = await _complete(claude_provider, message, _SYSTEM_PROMPT)
+        raw = await complete(claude_provider, message, _SYSTEM_PROMPT)
     except ProviderRequestError as exc:
         return _record_failed_analysis(db, user, project, query, str(exc))
 

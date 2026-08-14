@@ -3,7 +3,7 @@ const QUICK_CREATE = [
   { icon: "bi-camera-reels", label: "Video" },
   { icon: "bi-mic", label: "Audio" },
   { icon: "bi-easel", label: "PPT" },
-  { icon: "bi-file-earmark-text", label: "Word" },
+  { icon: "bi-file-earmark-text", label: "Word", href: "documents.html" },
   { icon: "bi-file-earmark-spreadsheet", label: "Excel" },
   { icon: "bi-globe", label: "Website" },
   { icon: "bi-badge-3d", label: "3D Web" },
@@ -14,14 +14,18 @@ const QUICK_CREATE = [
 function initQuickCreate() {
   document.getElementById("quick-create-grid").innerHTML = QUICK_CREATE.map(
     (tile) => `
-    <div class="surface quick-create-tile" data-quick-create="${tile.label}">
+    <div class="surface quick-create-tile" data-quick-create="${tile.label}" ${tile.href ? `data-href="${tile.href}"` : ""}>
       <i class="bi ${tile.icon}"></i>
       <span>${tile.label}</span>
-      <span class="nav-link-badge">Soon</span>
+      ${tile.href ? "" : '<span class="nav-link-badge">Soon</span>'}
     </div>`
   ).join("");
   document.querySelectorAll("[data-quick-create]").forEach((el) => {
     el.addEventListener("click", () => {
+      if (el.dataset.href) {
+        window.location.href = el.dataset.href;
+        return;
+      }
       window.AIAgentToast.show(
         `${el.dataset.quickCreate} generation is planned for a later development phase.`,
         "info"

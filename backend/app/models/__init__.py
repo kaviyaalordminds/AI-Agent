@@ -4,6 +4,7 @@ resolved. Import `app.models` once at startup (main.py does this) before
 using the ORM.
 """
 from app.models.conversation import AgentMode, Conversation, Message, MessageRole  # noqa: F401
+from app.models.document import Document, DocumentFormat, DocumentStatus  # noqa: F401
 from app.models.history import HistoryEntry, HistoryEntryStatus, HistoryEntryType  # noqa: F401
 from app.models.knowledge_analysis import KnowledgeAnalysis, KnowledgeAnalysisStatus  # noqa: F401
 from app.models.project import Project, ProjectStatus  # noqa: F401
@@ -29,4 +30,7 @@ __all__ = [
     "MessageRole",
     "KnowledgeAnalysis",
     "KnowledgeAnalysisStatus",
+    "Document",
+    "DocumentFormat",
+    "DocumentStatus",
 ]

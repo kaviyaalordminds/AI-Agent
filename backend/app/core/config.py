@@ -52,6 +52,13 @@ class Settings(BaseSettings):
     claude_model: str = "claude-sonnet-5"
     claude_max_output_tokens: int = 4096
 
+    # --- Storage provider ---
+    storage_provider: Literal["local"] = "local"
+    # Root directory generated assets (documents, images, etc.) are written
+    # under, namespaced by category then user id. Relative paths are
+    # resolved against the backend process's working directory.
+    storage_root: str = "../storage"
+
     # --- Obsidian provider ---
     obsidian_provider: Literal["local_vault"] = "local_vault"
     # Root directory containing one vault subdirectory per user
