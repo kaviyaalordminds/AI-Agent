@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Dashboard · AI Agent Platform</title>
+<script>
+  (function () {
+    var theme = localStorage.getItem("aiagent:theme") || "dark";
+    document.documentElement.setAttribute("data-theme", theme);
+  })();
+</script>
+<link rel="icon" type="image/svg+xml" href="../assets/images/favicon.svg">
+<link rel="stylesheet" href="../assets/vendor/bootstrap/css/bootstrap.min.css">
+<link rel="stylesheet" href="../assets/vendor/bootstrap-icons/bootstrap-icons.min.css">
+<link rel="stylesheet" href="../assets/css/theme.css">
+<link rel="stylesheet" href="../assets/css/app.css">
+</head>
+<body>
+
+<div class="app-shell">
+  <aside class="app-sidebar" id="app-sidebar"></aside>
+
+  <div class="app-main">
+    <header class="app-topbar">
+      <div class="d-flex align-items-center gap-3">
+        <button type="button" class="sidebar-collapse-btn d-md-none" id="mobile-sidebar-toggle"><i class="bi bi-list"></i></button>
+        <h5 class="mb-0">Home</h5>
+      </div>
+      <div class="d-flex align-items-center gap-3">
+        <div class="theme-toggle" data-theme-toggle>
+          <button type="button" data-theme-value="light" title="Light theme"><i class="bi bi-sun"></i></button>
+          <button type="button" data-theme-value="dark" title="Dark theme"><i class="bi bi-moon-stars"></i></button>
+        </div>
+        <div class="user-menu-trigger" onclick="window.location.href='profile.html'">
+          <div class="avatar-circle" id="topbar-user-avatar">--</div>
+          <div class="d-none d-sm-block">
+            <div style="font-size:0.85rem; font-weight:600;" id="topbar-user-name">Loading…</div>
+            <div style="font-size:0.72rem; color:var(--text-muted);" id="topbar-user-email"></div>
+          </div>
+        </div>
+        <button type="button" class="btn-ghost" id="topbar-logout-btn" title="Log out"><i class="bi bi-box-arrow-right"></i></button>
+      </div>
+    </header>
+
+    <main class="app-content">
+      <h2 class="mb-1">What are we creating today?</h2>
+      <p style="color:var(--text-muted);" class="mb-4">Ask your AI agent, or jump straight into a creative tool.</p>
+
+      <div class="glass-panel command-input-shell mb-4">
+        <i class="bi bi-stars" style="color:var(--brand-400); font-size:1.2rem;"></i>
+        <input type="text" id="command-input" placeholder="Ask your AI Agent…" />
+        <button type="button" class="btn-brand" id="command-submit"><i class="bi bi-arrow-up"></i></button>
+      </div>
+
+      <h6 class="text-uppercase mb-3" style="font-size:0.75rem; letter-spacing:0.06em; color:var(--text-muted);">Quick Create</h6>
+      <div class="quick-create-grid mb-5" id="quick-create-grid"></div>
+
+      <div class="row g-4">
+        <div class="col-lg-7">
+          <div class="surface p-4 mb-4">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <h6 class="mb-0">Active Projects</h6>
+            </div>
+            <div class="empty-state" id="projects-empty">
+              <div class="empty-icon"><i class="bi bi-kanban"></i></div>
+              <p class="mb-0">No projects yet.</p>
+              <p style="font-size:0.82rem;">The Projects system arrives in a later development phase.</p>
+            </div>
+          </div>
+
+          <div class="surface p-4">
+            <h6 class="mb-3">Recent Activity</h6>
+            <div class="empty-state" id="activity-empty">
+              <div class="empty-icon"><i class="bi bi-activity"></i></div>
+              <p class="mb-0">No activity yet.</p>
+              <p style="font-size:0.82rem;">Actions you and the AI agent take will appear here once the agent and history modules are built.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-lg-5">
+          <div class="surface p-4 mb-4">
+            <h6 class="mb-3">Obsidian Connection</h6>
+            <div class="d-flex align-items-center gap-2 mb-2">
+              <span class="dot dot-muted"></span>
+              <span style="font-size:0.9rem;">Not configured</span>
+            </div>
+            <p style="font-size:0.8rem; color:var(--text-muted);" class="mb-0">
+              The Obsidian/MCP integration is planned for a later phase. Once available, connect your vault from Settings.
+            </p>
+          </div>
+
+          <div class="surface p-4">
+            <h6 class="mb-3">Knowledge Intelligence</h6>
+            <div class="empty-state" id="knowledge-empty" style="padding: 1.5rem 0.5rem;">
+              <div class="empty-icon"><i class="bi bi-diagram-3"></i></div>
+              <p class="mb-0">Not available yet.</p>
+              <p style="font-size:0.82rem;">Knowledge gap/duplicate/outdated detection ships with the Knowledge Intelligence phase.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script src="../assets/js/config.js"></script>
+<script src="../assets/js/api.js"></script>
+<script src="../assets/js/theme.js"></script>
+<script src="../assets/js/toast.js"></script>
+<script src="../assets/js/nav.js"></script>
+<script>
+  const QUICK_CREATE = [
+    { icon: "bi-image", label: "Image" },
+    { icon: "bi-camera-reels", label: "Video" },
+    { icon: "bi-mic", label: "Audio" },
+    { icon: "bi-easel", label: "PPT" },
+    { icon: "bi-file-earmark-text", label: "Word" },
+    { icon: "bi-file-earmark-spreadsheet", label: "Excel" },
+    { icon: "bi-globe", label: "Website" },
+    { icon: "bi-badge-3d", label: "3D Web" },
+    { icon: "bi-file-earmark-image", label: "Poster" },
+    { icon: "bi-vector-pen", label: "Logo" },
+  ];
+  document.getElementById("quick-create-grid").innerHTML = QUICK_CREATE.map(
+    (tile) => `
+    <div class="surface quick-create-tile" data-quick-create="${tile.label}">
+      <i class="bi ${tile.icon}"></i>
+      <span>${tile.label}</span>
+      <span class="nav-link-badge">Soon</span>
+    </div>`
+  ).join("");
+  document.querySelectorAll("[data-quick-create]").forEach((el) => {
+    el.addEventListener("click", () => {
+      window.AIAgentToast.show(`${el.dataset.quickCreate} generation is planned for a later development phase.`, "info");
+    });
+  });
+
+  document.getElementById("command-submit").addEventListener("click", submitCommand);
+  document.getElementById("command-input").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") submitCommand();
+  });
+  function submitCommand() {
+    const input = document.getElementById("command-input");
+    if (!input.value.trim()) return;
+    window.AIAgentToast.show("The AI Agent chat engine is planned for a later development phase.", "info");
+    input.value = "";
+  }
+
+  window.AppShell.initAppShell("dashboard");
+</script>
+</body>
+</html>

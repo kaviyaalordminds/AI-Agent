@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AI Agent Platform</title>
+<script>
+  (function () {
+    var theme = localStorage.getItem("aiagent:theme") || "dark";
+    document.documentElement.setAttribute("data-theme", theme);
+  })();
+</script>
+<link rel="icon" type="image/svg+xml" href="assets/images/favicon.svg">
+<link rel="stylesheet" href="assets/vendor/bootstrap/css/bootstrap.min.css">
+<link rel="stylesheet" href="assets/css/theme.css">
+</head>
+<body style="display:flex; align-items:center; justify-content:center; height:100vh;">
+  <div class="spinner-border" role="status" style="color: var(--brand-500);"></div>
+  <script src="assets/js/config.js"></script>
+  <script src="assets/js/api.js"></script>
+  <script>
+    window.AIAgentApi.get("/users/me")
+      .then(() => { window.location.href = "pages/dashboard.html"; })
+      .catch(() => { window.location.href = "pages/login.html"; });
+  </script>
+</body>
+</html>

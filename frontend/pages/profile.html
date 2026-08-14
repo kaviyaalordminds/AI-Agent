@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Profile · AI Agent Platform</title>
+<script>
+  (function () {
+    var theme = localStorage.getItem("aiagent:theme") || "dark";
+    document.documentElement.setAttribute("data-theme", theme);
+  })();
+</script>
+<link rel="icon" type="image/svg+xml" href="../assets/images/favicon.svg">
+<link rel="stylesheet" href="../assets/vendor/bootstrap/css/bootstrap.min.css">
+<link rel="stylesheet" href="../assets/vendor/bootstrap-icons/bootstrap-icons.min.css">
+<link rel="stylesheet" href="../assets/css/theme.css">
+<link rel="stylesheet" href="../assets/css/app.css">
+<link rel="stylesheet" href="../assets/css/auth.css">
+</head>
+<body>
+
+<div class="app-shell">
+  <aside class="app-sidebar" id="app-sidebar"></aside>
+
+  <div class="app-main">
+    <header class="app-topbar">
+      <div class="d-flex align-items-center gap-3">
+        <button type="button" class="sidebar-collapse-btn d-md-none" id="mobile-sidebar-toggle"><i class="bi bi-list"></i></button>
+        <h5 class="mb-0">Profile</h5>
+      </div>
+      <div class="d-flex align-items-center gap-3">
+        <div class="theme-toggle" data-theme-toggle>
+          <button type="button" data-theme-value="light" title="Light theme"><i class="bi bi-sun"></i></button>
+          <button type="button" data-theme-value="dark" title="Dark theme"><i class="bi bi-moon-stars"></i></button>
+        </div>
+        <div class="user-menu-trigger" onclick="window.location.href='profile.html'">
+          <div class="avatar-circle" id="topbar-user-avatar">--</div>
+          <div class="d-none d-sm-block">
+            <div style="font-size:0.85rem; font-weight:600;" id="topbar-user-name">Loading…</div>
+            <div style="font-size:0.72rem; color:var(--text-muted);" id="topbar-user-email"></div>
+          </div>
+        </div>
+        <button type="button" class="btn-ghost" id="topbar-logout-btn" title="Log out"><i class="bi bi-box-arrow-right"></i></button>
+      </div>
+    </header>
+
+    <main class="app-content" style="max-width: 760px;">
+      <div class="surface p-4 mb-4">
+        <div class="d-flex align-items-center gap-3 mb-1">
+          <div class="avatar-circle" style="width:56px;height:56px;font-size:1.2rem;" id="profile-avatar">--</div>
+          <div>
+            <h5 class="mb-0" id="profile-name">Loading…</h5>
+            <div style="font-size:0.85rem; color:var(--text-muted);" id="profile-email"></div>
+          </div>
+          <span class="badge-pill ms-auto" id="profile-verified-badge"></span>
+        </div>
+      </div>
+
+      <div class="surface p-4 mb-4">
+        <h6 class="mb-3">Account information</h6>
+        <div id="profile-alert" class="alert-inline"></div>
+        <form id="profile-form" novalidate>
+          <div class="mb-3">
+            <label class="field-label" for="full_name">Full name</label>
+            <input class="form-control-premium" type="text" id="full_name" name="full_name" required />
+            <div class="field-error" data-error-for="full_name"></div>
+          </div>
+          <button type="submit" class="btn-brand" id="profile-save-btn"><i class="bi bi-check2"></i> Save changes</button>
+        </form>
+      </div>
+
+      <div class="surface p-4 mb-4">
+        <h6 class="mb-3">Change email</h6>
+        <div id="email-alert" class="alert-inline"></div>
+        <form id="email-form" novalidate>
+          <div class="mb-3">
+            <label class="field-label" for="new_email">New email address</label>
+            <input class="form-control-premium" type="email" id="new_email" name="new_email" required />
+            <div class="field-error" data-error-for="new_email"></div>
+          </div>
+          <div class="mb-3">
+            <label class="field-label" for="current_password_email">Current password</label>
+            <input class="form-control-premium" type="password" id="current_password_email" name="current_password" required />
+            <div class="field-error" data-error-for="current_password"></div>
+          </div>
+          <button type="submit" class="btn-brand" id="email-save-btn"><i class="bi bi-envelope"></i> Update email</button>
+        </form>
+      </div>
+
+      <div class="surface p-4 mb-4">
+        <h6 class="mb-3">Change password</h6>
+        <div id="password-alert" class="alert-inline"></div>
+        <form id="password-form" novalidate>
+          <div class="mb-3">
+            <label class="field-label" for="current_password">Current password</label>
+            <input class="form-control-premium" type="password" id="current_password" name="current_password" required />
+            <div class="field-error" data-error-for="current_password"></div>
+          </div>
+          <div class="mb-1">
+            <label class="field-label" for="new_password">New password</label>
+            <input class="form-control-premium" type="password" id="new_password" name="new_password" required />
+            <div id="password-strength-bars" class="password-strength">
+              <div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div>
+            </div>
+            <div id="password-strength-label" class="password-strength-label"></div>
+            <div class="field-error" data-error-for="new_password"></div>
+          </div>
+          <div class="mb-3 mt-2">
+            <label class="field-label" for="confirm_password">Confirm new password</label>
+            <input class="form-control-premium" type="password" id="confirm_password" name="confirm_password" required />
+            <div class="field-error" data-error-for="confirm_password"></div>
+          </div>
+          <button type="submit" class="btn-brand" id="password-save-btn"><i class="bi bi-key"></i> Change password</button>
+        </form>
+      </div>
+
+      <div class="surface p-4">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <h6 class="mb-0">Active sessions</h6>
+          <button type="button" class="btn-ghost" id="logout-all-btn" style="font-size:0.82rem;">Log out all devices</button>
+        </div>
+        <div id="sessions-list"></div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script src="../assets/js/config.js"></script>
+<script src="../assets/js/api.js"></script>
+<script src="../assets/js/theme.js"></script>
+<script src="../assets/js/toast.js"></script>
+<script src="../assets/js/nav.js"></script>
+<script src="../assets/js/auth.js"></script>
+<script src="../assets/js/profile.js"></script>
+</body>
+</html>

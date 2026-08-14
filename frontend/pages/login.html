@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Log in · AI Agent Platform</title>
+<script>
+  (function () {
+    var theme = localStorage.getItem("aiagent:theme") || "dark";
+    document.documentElement.setAttribute("data-theme", theme);
+  })();
+</script>
+<link rel="icon" type="image/svg+xml" href="../assets/images/favicon.svg">
+<link rel="stylesheet" href="../assets/vendor/bootstrap/css/bootstrap.min.css">
+<link rel="stylesheet" href="../assets/vendor/bootstrap-icons/bootstrap-icons.min.css">
+<link rel="stylesheet" href="../assets/css/theme.css">
+<link rel="stylesheet" href="../assets/css/auth.css">
+</head>
+<body>
+
+<div class="auth-shell">
+  <aside class="auth-brand-panel">
+    <div class="brand-mark">
+      <span class="glyph"><i class="bi bi-stars"></i></span>
+      AI Agent Platform
+    </div>
+    <div>
+      <h1>Your AI operating system for creative &amp; knowledge work.</h1>
+      <p class="lede">Chat with an agent that understands your projects and your Obsidian knowledge base, then generate images, sites, documents and more — all in one workspace.</p>
+      <div class="auth-feature-list">
+        <div class="feature"><i class="bi bi-diagram-3"></i> Knowledge-aware AI agent</div>
+        <div class="feature"><i class="bi bi-safe2"></i> Obsidian &amp; MCP integration</div>
+        <div class="feature"><i class="bi bi-palette"></i> Full creative studio suite</div>
+        <div class="feature"><i class="bi bi-shield-check"></i> Secure by design, no fake limits</div>
+      </div>
+    </div>
+    <div style="color:#74768e; font-size:0.8rem;">&copy; 2026 AI Agent Platform</div>
+  </aside>
+
+  <main class="auth-form-panel">
+    <div class="auth-top-bar">
+      <div class="theme-toggle" data-theme-toggle>
+        <button type="button" data-theme-value="light" title="Light theme"><i class="bi bi-sun"></i></button>
+        <button type="button" data-theme-value="dark" title="Dark theme"><i class="bi bi-moon-stars"></i></button>
+      </div>
+    </div>
+
+    <div class="auth-form-card">
+      <h2>Welcome back</h2>
+      <p class="subtitle">Log in to continue to your workspace.</p>
+
+      <div id="login-alert" class="alert-inline" role="alert"></div>
+
+      <form id="login-form" novalidate>
+        <div class="mb-3">
+          <label class="field-label" for="email">Email address</label>
+          <input class="form-control-premium" type="email" id="email" name="email" placeholder="you@example.com" required autocomplete="email" />
+          <div class="field-error" data-error-for="email"></div>
+        </div>
+        <div class="mb-2">
+          <div class="d-flex justify-content-between align-items-center">
+            <label class="field-label mb-0" for="password">Password</label>
+            <a href="forgot-password.html" style="font-size:0.82rem;">Forgot password?</a>
+          </div>
+          <input class="form-control-premium" type="password" id="password" name="password" placeholder="••••••••••" required autocomplete="current-password" />
+          <div class="field-error" data-error-for="password"></div>
+        </div>
+
+        <button type="button" id="resend-verification-link" class="btn-ghost w-100 mb-3 d-none" style="font-size:0.85rem;">
+          Resend verification email
+        </button>
+
+        <button type="submit" id="login-submit" class="btn-brand w-100 mt-2">
+          <i class="bi bi-box-arrow-in-right"></i> Log in
+        </button>
+      </form>
+
+      <p class="form-footer-link">Don't have an account? <a href="signup.html">Create one</a></p>
+    </div>
+  </main>
+</div>
+
+<script src="../assets/js/config.js"></script>
+<script src="../assets/js/api.js"></script>
+<script src="../assets/js/theme.js"></script>
+<script src="../assets/js/toast.js"></script>
+<script src="../assets/js/auth.js"></script>
+<script>window.AuthPages.initLogin();</script>
+</body>
+</html>

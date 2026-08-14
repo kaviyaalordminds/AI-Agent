@@ -1,0 +1,326 @@
+/* ==========================================================================
+   AI Agent Platform — Design tokens & base styles
+   Light theme is the default token set; dark theme overrides via
+   [data-theme="dark"]. Theme is applied as early as possible (inline script
+   in <head>, before first paint) to avoid a flash of the wrong theme.
+   ========================================================================== */
+
+:root {
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+
+  /* Brand */
+  --brand-500: #6366f1;
+  --brand-400: #818cf8;
+  --brand-600: #4f46e5;
+  --brand-glow: rgba(99, 102, 241, 0.35);
+
+  /* Surfaces */
+  --bg-canvas: #f4f5fb;
+  --bg-surface: #ffffff;
+  --bg-surface-raised: #ffffff;
+  --bg-surface-alt: #eef0fa;
+  --bg-glass: rgba(255, 255, 255, 0.7);
+  --border-subtle: rgba(15, 17, 32, 0.08);
+  --border-strong: rgba(15, 17, 32, 0.14);
+
+  /* Text */
+  --text-primary: #12121f;
+  --text-secondary: #4b4d63;
+  --text-muted: #85869c;
+  --text-on-brand: #ffffff;
+
+  /* Status */
+  --success: #16a34a;
+  --success-bg: rgba(22, 163, 74, 0.1);
+  --warning: #d97706;
+  --warning-bg: rgba(217, 119, 6, 0.1);
+  --danger: #dc2626;
+  --danger-bg: rgba(220, 38, 38, 0.1);
+  --info: #0284c7;
+  --info-bg: rgba(2, 132, 199, 0.1);
+
+  --shadow-sm: 0 1px 2px rgba(15, 17, 32, 0.06);
+  --shadow-md: 0 8px 24px rgba(15, 17, 32, 0.08);
+  --shadow-lg: 0 20px 48px rgba(15, 17, 32, 0.14);
+  --shadow-glow: 0 0 0 1px var(--border-subtle), 0 12px 32px var(--brand-glow);
+
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-pill: 999px;
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --transition-fast: 150ms var(--ease-out);
+  --transition-base: 220ms var(--ease-out);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg-canvas: #0a0b12;
+    --bg-surface: #12131e;
+    --bg-surface-raised: #171826;
+    --bg-surface-alt: #1a1c2b;
+    --bg-glass: rgba(23, 24, 38, 0.72);
+    --border-subtle: rgba(255, 255, 255, 0.08);
+    --border-strong: rgba(255, 255, 255, 0.14);
+
+    --text-primary: #f3f4fb;
+    --text-secondary: #b6b8cc;
+    --text-muted: #74768e;
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.35);
+    --shadow-lg: 0 24px 56px rgba(0, 0, 0, 0.5);
+    --shadow-glow: 0 0 0 1px var(--border-subtle), 0 16px 40px rgba(99, 102, 241, 0.28);
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg-canvas: #0a0b12;
+  --bg-surface: #12131e;
+  --bg-surface-raised: #171826;
+  --bg-surface-alt: #1a1c2b;
+  --bg-glass: rgba(23, 24, 38, 0.72);
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.14);
+
+  --text-primary: #f3f4fb;
+  --text-secondary: #b6b8cc;
+  --text-muted: #74768e;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 24px 56px rgba(0, 0, 0, 0.5);
+  --shadow-glow: 0 0 0 1px var(--border-subtle), 0 16px 40px rgba(99, 102, 241, 0.28);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  background: var(--bg-canvas);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  transition: background var(--transition-base), color var(--transition-base);
+}
+
+a { color: var(--brand-400); text-decoration: none; }
+a:hover { color: var(--brand-500); }
+
+::selection { background: var(--brand-glow); }
+
+/* Scrollbars */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: var(--radius-pill); }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+/* ---- Reusable primitives ---- */
+
+.surface {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.glass-panel {
+  background: var(--bg-glass);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+}
+
+.btn-brand {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  background: linear-gradient(135deg, var(--brand-500), var(--brand-600));
+  color: var(--text-on-brand);
+  border: none;
+  border-radius: var(--radius-md);
+  padding: 0.75rem 1.25rem;
+  font-weight: 600;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast), opacity var(--transition-fast);
+  box-shadow: 0 8px 20px var(--brand-glow);
+}
+.btn-brand:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 12px 28px var(--brand-glow); }
+.btn-brand:active:not(:disabled) { transform: translateY(0); }
+.btn-brand:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  padding: 0.7rem 1.2rem;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.btn-ghost:hover { background: var(--bg-surface-alt); color: var(--text-primary); }
+
+.form-control-premium {
+  width: 100%;
+  background: var(--bg-surface-alt);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 0.75rem 1rem;
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+.form-control-premium:focus {
+  outline: none;
+  border-color: var(--brand-500);
+  box-shadow: 0 0 0 3px var(--brand-glow);
+}
+.form-control-premium::placeholder { color: var(--text-muted); }
+
+.field-label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 0.4rem;
+  display: block;
+}
+
+.field-error {
+  color: var(--danger);
+  font-size: 0.82rem;
+  margin-top: 0.35rem;
+  display: none;
+}
+.field-error.visible { display: block; }
+
+.badge-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.75rem;
+  border-radius: var(--radius-pill);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+.badge-success { background: var(--success-bg); color: var(--success); }
+.badge-warning { background: var(--warning-bg); color: var(--warning); }
+.badge-danger { background: var(--danger-bg); color: var(--danger); }
+.badge-info { background: var(--info-bg); color: var(--info); }
+.badge-muted { background: var(--bg-surface-alt); color: var(--text-muted); }
+
+.dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.dot-success { background: var(--success); box-shadow: 0 0 8px var(--success); }
+.dot-danger { background: var(--danger); }
+.dot-muted { background: var(--text-muted); }
+
+/* Theme toggle switch */
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--bg-surface-alt);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-pill);
+  padding: 0.4rem;
+  cursor: pointer;
+}
+.theme-toggle button {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.theme-toggle button.active {
+  background: linear-gradient(135deg, var(--brand-500), var(--brand-600));
+  color: #fff;
+}
+
+/* Labeled variant (icon + text, e.g. Settings > General) needs room for
+   the text — the default toggle is sized for icon-only topbar use. */
+.theme-toggle.labeled button {
+  width: auto;
+  height: auto;
+  border-radius: var(--radius-pill);
+  padding: 0.5rem 1rem;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+/* Toast notifications */
+#toast-stack {
+  position: fixed;
+  top: 1.25rem;
+  right: 1.25rem;
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  max-width: 380px;
+}
+.toast-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+  padding: 0.9rem 1rem;
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  box-shadow: var(--shadow-lg);
+  animation: toast-in var(--transition-base);
+  font-size: 0.88rem;
+  color: var(--text-primary);
+}
+.toast-item.success { border-left: 3px solid var(--success); }
+.toast-item.error { border-left: 3px solid var(--danger); }
+.toast-item.info { border-left: 3px solid var(--info); }
+@keyframes toast-in {
+  from { opacity: 0; transform: translateX(24px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* Skeleton loading */
+.skeleton {
+  background: linear-gradient(90deg, var(--bg-surface-alt) 25%, var(--border-subtle) 37%, var(--bg-surface-alt) 63%);
+  background-size: 400% 100%;
+  animation: skeleton-loading 1.4s ease infinite;
+  border-radius: var(--radius-sm);
+}
+@keyframes skeleton-loading {
+  0% { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
+}
+
+/* Empty state */
+.empty-state {
+  text-align: center;
+  padding: 3rem 1.5rem;
+  color: var(--text-muted);
+}
+.empty-state .empty-icon {
+  font-size: 2.2rem;
+  margin-bottom: 0.75rem;
+  opacity: 0.6;
+}

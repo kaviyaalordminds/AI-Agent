@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+
+# Logs
+*.log
+
+# Frontend
+node_modules/
+
+# Storage (generated assets live outside git; see storage/README.md)
+storage/**
+!storage/**/
+!storage/**/.gitkeep
+!storage/README.md

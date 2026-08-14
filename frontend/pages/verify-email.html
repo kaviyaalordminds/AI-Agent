@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Verify email · AI Agent Platform</title>
+<script>
+  (function () {
+    var theme = localStorage.getItem("aiagent:theme") || "dark";
+    document.documentElement.setAttribute("data-theme", theme);
+  })();
+</script>
+<link rel="icon" type="image/svg+xml" href="../assets/images/favicon.svg">
+<link rel="stylesheet" href="../assets/vendor/bootstrap/css/bootstrap.min.css">
+<link rel="stylesheet" href="../assets/vendor/bootstrap-icons/bootstrap-icons.min.css">
+<link rel="stylesheet" href="../assets/css/theme.css">
+<link rel="stylesheet" href="../assets/css/auth.css">
+</head>
+<body>
+
+<div class="auth-shell" style="grid-template-columns: 1fr;">
+  <main class="auth-form-panel">
+    <div class="auth-top-bar">
+      <div class="theme-toggle" data-theme-toggle>
+        <button type="button" data-theme-value="light" title="Light theme"><i class="bi bi-sun"></i></button>
+        <button type="button" data-theme-value="dark" title="Dark theme"><i class="bi bi-moon-stars"></i></button>
+      </div>
+    </div>
+
+    <div class="auth-form-card text-center">
+      <div id="verify-status" class="empty-state">
+        <div class="empty-icon"><span class="spinner-border" role="status"></span></div>
+        <h2>Verifying your email…</h2>
+        <p class="subtitle">This will only take a moment.</p>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script src="../assets/js/config.js"></script>
+<script src="../assets/js/api.js"></script>
+<script src="../assets/js/theme.js"></script>
+<script src="../assets/js/toast.js"></script>
+<script src="../assets/js/auth.js"></script>
+<script>window.AuthPages.initVerifyEmail();</script>
+</body>
+</html>
