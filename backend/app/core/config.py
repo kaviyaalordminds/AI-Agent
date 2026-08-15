@@ -117,12 +117,6 @@ class Settings(BaseSettings):
     # picks "local" or "cloud"; when "cloud", this key is what the image
     # factory actually uses (see app/integrations/generation/image/factory.py).
     openai_api_key: str | None = None
-    # dall-e-3 was rejected by a real account/key with "The model
-    # 'dall-e-3' does not exist" (400, image_generation_user_error) —
-    # gpt-image-1 is OpenAI's current image-generation model and the one
-    # newer API keys/projects are provisioned against. Override via
-    # OPENAI_IMAGE_MODEL if your account needs a different one (check
-    # with GET https://api.openai.com/v1/models using your own key).
     openai_image_model: str = "gpt-image-1"
 
     # --- Storage provider ---
