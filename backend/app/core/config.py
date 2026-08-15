@@ -103,9 +103,12 @@ class Settings(BaseSettings):
     # veo-2.0-generate-001 was retired / is no longer served by the Gemini
     # API's predictLongRunning endpoint (returns 404 "not found ... or is
     # not supported for predictLongRunning") — veo-3.1-generate-preview is
-    # the currently supported model as of this writing. Override via
+    # the currently supported model as of this writing, confirmed with a
+    # real API key: the request is now accepted (a 429 quota/billing
+    # response came back, not a 404 unknown-model response). Override via
     # GEMINI_VIDEO_MODEL if Google ships a newer one before this default
-    # is updated again.
+    # is updated again — do not revert to veo-2.0-generate-001, it is
+    # confirmed gone from predictLongRunning.
     gemini_video_model: str = "veo-3.1-generate-preview"
 
     # --- OpenAI image generation ---
