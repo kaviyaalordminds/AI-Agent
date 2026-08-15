@@ -19,7 +19,13 @@ function clamp(n, min, max) {
 
 function initSplitView(container, { storageKey, stacked = false, presetsEl } = {}) {
   const stored = storageKey ? Number(localStorage.getItem(storageKey)) : NaN;
-  let ratio = clamp(Number.isFinite(stored) && stored ? stored : 50, MIN_RATIO, MAX_RATIO);
+  // Falls back to the account-wide default (set on the Settings > Workspace
+  // tab, mirrored to localStorage the same way sidebar-collapsed is) before
+  // the hardcoded 50/50, so a workspace the user hasn't resized yet still
+  // opens at their preferred starting ratio.
+  const globalDefault = Number(localStorage.getItem("aiagent:workspace-default-split-ratio"));
+  const fallback = Number.isFinite(globalDefault) && globalDefault ? globalDefault : 50;
+  let ratio = clamp(Number.isFinite(stored) && stored ? stored : fallback, MIN_RATIO, MAX_RATIO);
 
   if (stacked) container.classList.add("split-stacked");
   container.style.setProperty("--split-ratio", ratio);

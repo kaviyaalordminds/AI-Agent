@@ -67,7 +67,11 @@ async function init() {
   }
 
   document.getElementById("language-select").value = settings.language;
-  document.getElementById("sidebar-collapsed-toggle").checked = settings.sidebar_collapsed;
+  // Sidebar collapse state: localStorage (via nav.js) is the authoritative,
+  // instantly-applied source of truth — the backend field is a synced
+  // mirror, not the source, so this checkbox reflects what's actually on
+  // screen right now rather than possibly-stale DB state.
+  document.getElementById("sidebar-collapsed-toggle").checked = window.AppShell.isSidebarCollapsed();
 
   // Theme toggle inside the settings page persists to the backend too,
   // in addition to localStorage (handled by theme.js).
@@ -89,6 +93,10 @@ async function init() {
   });
 
   document.getElementById("sidebar-collapsed-toggle").addEventListener("change", async (e) => {
+    // Apply immediately via the shared sidebar state (updates the DOM +
+    // localStorage on this page right away), then mirror it to the backend
+    // so it's remembered account-wide.
+    window.AppShell.applySidebarCollapsed(e.target.checked);
     try {
       await window.AIAgentApi.patch("/users/me/settings", { sidebar_collapsed: e.target.checked });
       window.AIAgentToast.show("Sidebar preference saved.", "success");
@@ -102,6 +110,86 @@ async function init() {
   initObsidianTab();
   initStorageTab();
   initSystemStatusTab();
+  initWorkspaceTab(settings);
+  initNotificationsTab(settings);
+}
+
+const WORKSPACE_SPLIT_RATIOS = [
+  { key: "40-60", ratio: 40, label: "40 / 60" },
+  { key: "50-50", ratio: 50, label: "50 / 50" },
+  { key: "60-40", ratio: 60, label: "60 / 40" },
+];
+
+async function saveWorkspaceSettings(settings, patch, successMessage) {
+  try {
+    settings.workspace_settings = { ...(settings.workspace_settings || {}), ...patch };
+    await window.AIAgentApi.patch("/users/me/settings", { workspace_settings: settings.workspace_settings });
+    window.AIAgentToast.show(successMessage, "success");
+  } catch (err) {
+    window.AIAgentToast.show(err.message, "error");
+  }
+}
+
+function initWorkspaceTab(settings) {
+  const landingSelect = document.getElementById("workspace-landing-page-select");
+  const landingPage = (settings.workspace_settings && settings.workspace_settings.default_landing_page) || "dashboard.html";
+  landingSelect.value = landingPage;
+  landingSelect.addEventListener("change", async (e) => {
+    await saveWorkspaceSettings(settings, { default_landing_page: e.target.value }, "Default landing page saved.");
+  });
+
+  const ratioPicker = document.getElementById("workspace-split-ratio-picker");
+  const defaultRatio = (settings.workspace_settings && settings.workspace_settings.default_split_ratio) || 50;
+
+  function renderRatioPicker(selected) {
+    ratioPicker.innerHTML = WORKSPACE_SPLIT_RATIOS.map(
+      (r) => `<button type="button" class="mode-pill ${r.ratio === selected ? "active" : ""}" data-ratio="${r.ratio}">${r.label}</button>`
+    ).join("");
+    ratioPicker.querySelectorAll("[data-ratio]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const ratio = Number(btn.dataset.ratio);
+        renderRatioPicker(ratio);
+        // Mirror to localStorage immediately (same pattern as sidebar collapse)
+        // so workspace-layout.js can read it synchronously with no API round trip.
+        localStorage.setItem("aiagent:workspace-default-split-ratio", String(ratio));
+        await saveWorkspaceSettings(settings, { default_split_ratio: ratio }, "Default split-view ratio saved.");
+      });
+    });
+  }
+  renderRatioPicker(defaultRatio);
+  if (settings.workspace_settings && settings.workspace_settings.default_split_ratio) {
+    localStorage.setItem("aiagent:workspace-default-split-ratio", String(settings.workspace_settings.default_split_ratio));
+  }
+}
+
+const NOTIFICATION_TOGGLES = [
+  { id: "notif-enabled-toggle", field: "enabled", default: true },
+  { id: "notif-email-toggle", field: "email_notifications", default: false },
+  { id: "notif-generation-completed-toggle", field: "generation_completed", default: true },
+  { id: "notif-generation-failed-toggle", field: "generation_failed", default: true },
+  { id: "notif-project-toggle", field: "project_updates", default: true },
+  { id: "notif-security-toggle", field: "security_alerts", default: true },
+];
+
+function initNotificationsTab(settings) {
+  const stored = settings.notification_settings || {};
+
+  NOTIFICATION_TOGGLES.forEach(({ id, field, default: def }) => {
+    const el = document.getElementById(id);
+    el.checked = field in stored ? Boolean(stored[field]) : def;
+  });
+
+  NOTIFICATION_TOGGLES.forEach(({ id, field }) => {
+    document.getElementById(id).addEventListener("change", async (e) => {
+      try {
+        settings.notification_settings = { ...(settings.notification_settings || {}), [field]: e.target.checked };
+        await window.AIAgentApi.patch("/users/me/settings", { notification_settings: settings.notification_settings });
+        window.AIAgentToast.show("Notification preference saved.", "success");
+      } catch (err) {
+        window.AIAgentToast.show(err.message, "error");
+      }
+    });
+  });
 }
 
 async function loadStorageStatus() {

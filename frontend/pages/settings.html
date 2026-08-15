@@ -55,9 +55,9 @@
             <div class="nav-link-item" data-settings-tab="obsidian"><i class="bi bi-safe2"></i> Obsidian</div>
             <div class="nav-link-item" data-settings-tab="claude"><i class="bi bi-stars"></i> AI Provider</div>
             <div class="nav-link-item" data-settings-tab="storage"><i class="bi bi-hdd"></i> Storage</div>
-            <div class="nav-link-item" data-settings-tab="workspace"><i class="bi bi-layout-split"></i> Workspace <span class="nav-link-badge">Soon</span></div>
+            <div class="nav-link-item" data-settings-tab="workspace"><i class="bi bi-layout-split"></i> Workspace</div>
             <div class="nav-link-item" data-settings-tab="security"><i class="bi bi-shield-lock"></i> Security</div>
-            <div class="nav-link-item" data-settings-tab="notifications"><i class="bi bi-bell"></i> Notifications <span class="nav-link-badge">Soon</span></div>
+            <div class="nav-link-item" data-settings-tab="notifications"><i class="bi bi-bell"></i> Notifications</div>
             <div class="nav-link-item" data-settings-tab="system-status"><i class="bi bi-activity"></i> System Status</div>
           </div>
         </div>
@@ -176,11 +176,22 @@
 
           <div id="tab-workspace" class="settings-tab d-none">
             <div class="surface p-4">
-              <div class="empty-state">
-                <div class="empty-icon"><i class="bi bi-layout-split"></i></div>
-                <h6>Workspace preferences</h6>
-                <p style="font-size:0.85rem;">Full-screen/split-screen panel preferences ship alongside the Chat and Creative Studio workspaces.</p>
-              </div>
+              <h6 class="mb-3">Default landing page</h6>
+              <label class="field-label">Page to open right after you log in</label>
+              <select class="form-control-premium" id="workspace-landing-page-select" style="max-width:260px;">
+                <option value="dashboard.html">Home</option>
+                <option value="agent.html">AI Chat</option>
+                <option value="projects.html">Projects</option>
+                <option value="history.html">History</option>
+                <option value="knowledge.html">Knowledge Center</option>
+              </select>
+            </div>
+
+            <div class="surface p-4 mt-4">
+              <h6 class="mb-3">Default split-view ratio</h6>
+              <label class="field-label">Starting panel split for workspaces you haven't customized yet</label>
+              <div class="mode-pill-group" id="workspace-split-ratio-picker"></div>
+              <p style="font-size:0.78rem; color:var(--text-muted);" class="mt-2 mb-0">Any workspace you've already resized keeps its own saved ratio — this only sets the starting point for new ones.</p>
             </div>
           </div>
 
@@ -200,10 +211,37 @@
 
           <div id="tab-notifications" class="settings-tab d-none">
             <div class="surface p-4">
-              <div class="empty-state">
-                <div class="empty-icon"><i class="bi bi-bell"></i></div>
-                <h6>Notification preferences</h6>
-                <p style="font-size:0.85rem;">Generation/deployment/knowledge-update notification toggles ship alongside the modules that produce those events.</p>
+              <h6 class="mb-3">Notifications</h6>
+              <div class="form-check form-switch mb-3">
+                <input class="form-check-input" type="checkbox" id="notif-enabled-toggle">
+                <label class="form-check-label" for="notif-enabled-toggle" style="font-size:0.88rem;">Enable notifications</label>
+                <p style="font-size:0.78rem; color:var(--text-muted);" class="mb-0">Master switch — turning this off disables all notification types below.</p>
+              </div>
+              <div class="form-check form-switch mb-3">
+                <input class="form-check-input" type="checkbox" id="notif-email-toggle">
+                <label class="form-check-label" for="notif-email-toggle" style="font-size:0.88rem;">Email notifications</label>
+                <p style="font-size:0.78rem; color:var(--text-muted);" class="mb-0">Send a copy of enabled notifications to your account email.</p>
+              </div>
+              <hr style="border-color: var(--border-subtle);">
+              <div class="form-check form-switch mb-3">
+                <input class="form-check-input" type="checkbox" id="notif-generation-completed-toggle">
+                <label class="form-check-label" for="notif-generation-completed-toggle" style="font-size:0.88rem;">Generation completed</label>
+                <p style="font-size:0.78rem; color:var(--text-muted);" class="mb-0">Notify when an image, video, document, or audio generation job finishes successfully.</p>
+              </div>
+              <div class="form-check form-switch mb-3">
+                <input class="form-check-input" type="checkbox" id="notif-generation-failed-toggle">
+                <label class="form-check-label" for="notif-generation-failed-toggle" style="font-size:0.88rem;">Generation failed</label>
+                <p style="font-size:0.78rem; color:var(--text-muted);" class="mb-0">Notify when a generation job fails.</p>
+              </div>
+              <div class="form-check form-switch mb-3">
+                <input class="form-check-input" type="checkbox" id="notif-project-toggle">
+                <label class="form-check-label" for="notif-project-toggle" style="font-size:0.88rem;">Project activity</label>
+                <p style="font-size:0.78rem; color:var(--text-muted);" class="mb-0">Notify on updates to projects you own or are part of.</p>
+              </div>
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="notif-security-toggle">
+                <label class="form-check-label" for="notif-security-toggle" style="font-size:0.88rem;">Security &amp; login alerts</label>
+                <p style="font-size:0.78rem; color:var(--text-muted);" class="mb-0">Notify on new sign-ins and other account security events.</p>
               </div>
             </div>
           </div>

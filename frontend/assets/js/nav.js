@@ -193,6 +193,21 @@ async function logout() {
   window.location.href = "login.html";
 }
 
+// Single source of truth for sidebar collapse state, shared by the sidebar's
+// own toggle button (nav.js) and the Settings page checkbox — both call this
+// instead of maintaining their own DOM/localStorage/backend copies.
+function isSidebarCollapsed() {
+  return localStorage.getItem("aiagent:sidebar-collapsed") === "1";
+}
+
+function applySidebarCollapsed(collapsed) {
+  const shell = document.querySelector(".app-shell");
+  if (shell) shell.classList.toggle("sidebar-collapsed", collapsed);
+  localStorage.setItem("aiagent:sidebar-collapsed", collapsed ? "1" : "0");
+  const settingsToggle = document.getElementById("sidebar-collapsed-toggle");
+  if (settingsToggle) settingsToggle.checked = collapsed;
+}
+
 async function initAppShell(activeKey) {
   let user;
   try {
@@ -221,14 +236,9 @@ async function initAppShell(activeKey) {
     });
   });
 
-  const collapsed = localStorage.getItem("aiagent:sidebar-collapsed") === "1";
-  if (collapsed) shell.classList.add("sidebar-collapsed");
+  applySidebarCollapsed(isSidebarCollapsed());
   document.getElementById("sidebar-collapse-toggle").addEventListener("click", () => {
-    shell.classList.toggle("sidebar-collapsed");
-    localStorage.setItem(
-      "aiagent:sidebar-collapsed",
-      shell.classList.contains("sidebar-collapsed") ? "1" : "0"
-    );
+    applySidebarCollapsed(!shell.classList.contains("sidebar-collapsed"));
   });
 
   const userNameEl = document.getElementById("topbar-user-name");
@@ -249,4 +259,12 @@ async function initAppShell(activeKey) {
   return user;
 }
 
-window.AppShell = { initAppShell, logout, loadSessions, renderSessions, formatDateTime };
+window.AppShell = {
+  initAppShell,
+  logout,
+  loadSessions,
+  renderSessions,
+  formatDateTime,
+  isSidebarCollapsed,
+  applySidebarCollapsed,
+};

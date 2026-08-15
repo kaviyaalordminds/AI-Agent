@@ -29,10 +29,16 @@ function hasActiveFilters() {
 async function loadHistory() {
   const listEl = document.getElementById("history-list");
   const emptyEl = document.getElementById("history-empty");
+  const loadingEl = document.getElementById("history-loading");
+
+  listEl.innerHTML = "";
+  emptyEl.classList.add("d-none");
+  loadingEl.classList.remove("d-none");
 
   try {
     const res = await window.AIAgentApi.get(`/history?${currentHistoryFilters().toString()}`);
     historyTotal = res.total;
+    loadingEl.classList.add("d-none");
 
     if (!res.items.length) {
       listEl.innerHTML = "";
@@ -52,6 +58,14 @@ async function loadHistory() {
 
     updatePagination();
   } catch (err) {
+    loadingEl.classList.add("d-none");
+    listEl.innerHTML = "";
+    emptyEl.classList.remove("d-none");
+    document.getElementById("history-empty-title").textContent = "Unable to load history";
+    document.getElementById("history-empty-subtitle").textContent =
+      "Something went wrong while loading your history. Please try again.";
+    historyTotal = 0;
+    updatePagination();
     window.AIAgentToast.show(err.message, "error");
   }
 }

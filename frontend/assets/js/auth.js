@@ -140,7 +140,16 @@ function initLogin() {
     setLoading(submitBtn, true, "Signing in…");
     try {
       await window.AIAgentApi.post("/auth/login", payload);
-      window.location.href = "dashboard.html";
+      let landingPage = "dashboard.html";
+      try {
+        const settings = await window.AIAgentApi.get("/users/me/settings");
+        if (settings.workspace_settings && settings.workspace_settings.default_landing_page) {
+          landingPage = settings.workspace_settings.default_landing_page;
+        }
+      } catch {
+        // Non-fatal: fall back to the dashboard if the preference can't be read.
+      }
+      window.location.href = landingPage;
     } catch (err) {
       if (err.status === 403 && /verify/i.test(err.message)) {
         showAlert(alertEl, err.message, "error");
