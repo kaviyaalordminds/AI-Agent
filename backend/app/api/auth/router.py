@@ -4,6 +4,7 @@ import uuid
 from datetime import timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
@@ -159,21 +160,36 @@ def resend_verification(
 
 @router.post("/login", response_model=UserOut)
 def login(payload: LoginRequest, request: Request, response: Response, db: Session = Depends(get_db)):
-    # Temporary diagnostic timing, staged exactly as requested while
-    # tracking down a reported "server took too long to respond" login
-    # timeout — never logs the password, session token, or any secret,
-    # only elapsed time at each stage so a genuine hang (DB connection,
-    # Argon2, session insert) is visible in the log instead of only
-    # showing up as a client-side timeout with no clue where it happened.
+    # Temporary diagnostic timing, staged exactly in the "[LOGIN] ..."
+    # checkpoint format requested while tracking down a reported genuine
+    # 20-second login hang. Never logs the password, session token, or any
+    # secret — only elapsed time at each stage, so a real hang (DB
+    # connection acquisition, the user-lookup query, Argon2, session
+    # insert) is visible in the backend log instead of only showing up as
+    # a client-side timeout with no clue where it happened. Includes an
+    # isolated "SELECT 1" probe, timed separately from the User query, to
+    # tell connection-acquisition latency apart from query latency.
     t0 = time.perf_counter()
-    logger.info("login: request received")
 
+    def elapsed() -> float:
+        return time.perf_counter() - t0
+
+    logger.info("[LOGIN] request received")
+
+    logger.info("[LOGIN] rate limit check started (%.3fs elapsed)", elapsed())
     enforce_rate_limit(request, bucket="login", max_requests=10)
+    logger.info("[LOGIN] rate limit check completed (%.3fs elapsed)", elapsed())
+
+    logger.info("[LOGIN] database connection probe started (%.3fs elapsed)", elapsed())
+    db.execute(text("SELECT 1"))
+    logger.info("[LOGIN] database connection probe completed (%.3fs elapsed)", elapsed())
 
     email = payload.email.lower().strip()
-    logger.info("login: user lookup started (%.3fs elapsed)", time.perf_counter() - t0)
+    logger.info("[LOGIN] database lookup started (%.3fs elapsed)", elapsed())
     user = db.query(User).filter(User.email == email).first()
-    logger.info("login: user lookup completed, found=%s (%.3fs elapsed)", user is not None, time.perf_counter() - t0)
+    logger.info(
+        "[LOGIN] database lookup completed, found=%s (%.3fs elapsed)", user is not None, elapsed()
+    )
 
     generic_error = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect email or password."
@@ -193,10 +209,10 @@ def login(payload: LoginRequest, request: Request, response: Response, db: Sessi
             ),
         )
 
-    logger.info("login: password verification started (%.3fs elapsed)", time.perf_counter() - t0)
+    logger.info("[LOGIN] password verification started (%.3fs elapsed)", elapsed())
     password_ok = verify_password(payload.password, user.password_hash)
     logger.info(
-        "login: password verification completed, match=%s (%.3fs elapsed)", password_ok, time.perf_counter() - t0
+        "[LOGIN] password verification completed, match=%s (%.3fs elapsed)", password_ok, elapsed()
     )
     if not password_ok:
         user.failed_login_attempts += 1
@@ -208,6 +224,7 @@ def login(payload: LoginRequest, request: Request, response: Response, db: Sessi
         raise generic_error
 
     if not user.email_verified:
+        logger.info("[LOGIN] email verification check completed, verified=False (%.3fs elapsed)", elapsed())
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Please verify your email address before logging in.",
@@ -216,20 +233,22 @@ def login(payload: LoginRequest, request: Request, response: Response, db: Sessi
     if not user.is_active:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="This account is disabled.")
 
+    logger.info("[LOGIN] email verification check completed, verified=True (%.3fs elapsed)", elapsed())
+
     user.failed_login_attempts = 0
     user.locked_until = None
     user.last_login_at = utcnow()
     db.add(user)
     db.commit()
 
-    logger.info("login: session creation started (%.3fs elapsed)", time.perf_counter() - t0)
+    logger.info("[LOGIN] session creation started (%.3fs elapsed)", elapsed())
     session, raw_token = create_session(db, user, request)
     set_session_cookies(response, session, raw_token)
     logger.info(
-        "login: session creation completed, session_id=%s (%.3fs elapsed)", session.id, time.perf_counter() - t0
+        "[LOGIN] session creation completed, session_id=%s (%.3fs elapsed)", session.id, elapsed()
     )
 
-    logger.info("login: response returned, user=%s (%.3fs total)", user.id, time.perf_counter() - t0)
+    logger.info("[LOGIN] response returned, user=%s (%.3fs total)", user.id, elapsed())
     return UserOut.model_validate(user)
 
 
