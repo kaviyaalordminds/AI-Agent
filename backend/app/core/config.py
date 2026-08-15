@@ -114,7 +114,7 @@ class Settings(BaseSettings):
     # picks "local" or "cloud"; when "cloud", this key is what the image
     # factory actually uses (see app/integrations/generation/image/factory.py).
     openai_api_key: str | None = None
-    openai_image_model: str = "dall-e-3"
+    openai_image_model: str = "gpt-image-1"
 
     # --- Storage provider ---
     storage_provider: Literal["local"] = "local"
