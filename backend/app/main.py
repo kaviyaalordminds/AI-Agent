@@ -113,6 +113,77 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
 
 
 @app.on_event("startup")
+def _apply_pending_migrations() -> None:
+    """Auto-apply any pending Alembic migrations on process startup.
+
+    Root cause of a real recurring bug class (reproduced directly: with
+    the `error_type` column absent, GET /api/jobs?type=image/video
+    failed with sqlalchemy.exc.ProgrammingError: UndefinedColumn, which
+    the generic exception handler above turns into a 500 the browser
+    shows as "An unexpected server error occurred" — see the git history
+    around migration 3bac8ec7a505 for the earlier incident this exact
+    failure mode caused): a developer pulls new code that adds a column/
+    table but forgets to separately run `alembic upgrade head` before
+    restarting the server, so the ORM model and the actual database
+    schema disagree. Every migration in alembic/versions/ is additive
+    (add_column/create_table, no destructive drops in upgrade()), so
+    running this on every startup is safe and, per Alembic's own
+    design, a no-op when the database is already at head.
+
+    Skipped entirely in the test environment: tests build their schema
+    directly via Base.metadata.create_all() (see tests/conftest.py),
+    which has no `alembic_version` bookkeeping table, so running Alembic
+    against it would fail with "relation already exists" — and
+    TestClient's `with` context re-triggers this startup event on every
+    single test.
+
+    Failure here is logged loudly but never crashes the process: an
+    unreachable database will fail obviously on the very first real
+    request anyway (see GET /api/system/providers/health), and refusing
+    to serve ANY request — including ones that don't touch the
+    database at all — over a migration-specific failure would be a
+    worse outcome than the bug this fixes.
+    """
+    if settings.app_env == "testing":
+        return
+    from pathlib import Path
+
+    from alembic import command
+    from alembic.config import Config
+
+    try:
+        alembic_ini = Path(__file__).resolve().parent.parent / "alembic.ini"
+        cfg = Config(str(alembic_ini))
+        cfg.set_main_option("script_location", str(alembic_ini.parent / "alembic"))
+        command.upgrade(cfg, "head")
+        logger.info("Database schema is up to date (alembic upgrade head).")
+    except Exception:
+        logger.exception(
+            "Could not auto-apply database migrations at startup. The app will keep "
+            "starting, but any endpoint touching an out-of-date table may fail until "
+            "this is resolved — run `alembic upgrade head` manually from backend/."
+        )
+    finally:
+        # alembic/env.py calls logging.config.fileConfig(alembic.ini) as a
+        # side effect of the command above. fileConfig()'s default
+        # disable_existing_loggers=True does something easy to miss:
+        # it doesn't just replace the root logger's handlers, it sets
+        # `.disabled = True` directly on every Logger object that
+        # already existed (app, uvicorn, api.auth, etc.) — reproduced
+        # directly: resetting root.handlers alone left every one of
+        # those loggers silently dropping all future messages, so
+        # nothing (not even uvicorn's own "Application startup
+        # complete.") logged again for the rest of the process. Clear
+        # that flag on every logger, then reapply this app's own
+        # configure_logging() so nothing downstream of this hook is
+        # silently unlogged.
+        for existing_logger in logging.root.manager.loggerDict.values():
+            if isinstance(existing_logger, logging.Logger):
+                existing_logger.disabled = False
+        configure_logging()
+
+
+@app.on_event("startup")
 def _validate_obsidian_vault_path() -> None:
     """OBSIDIAN_VAULT_PATH (see app/core/config.py, app/integrations/
     obsidian/factory.py) is optional — most deployments leave it unset

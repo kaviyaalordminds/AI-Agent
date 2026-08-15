@@ -85,6 +85,42 @@ class TestAudioJobEndToEnd:
         assert len(client.get("/api/jobs?status=completed").json()) == 1
         assert len(client.get("/api/jobs?status=queued").json()) == 0
 
+    def test_list_populated_image_and_video_jobs_via_generic_jobs_endpoint(self, auth_client):
+        """A real gap: every other image/video job test polls via
+        /api/generation/{image,video}/{id} (see test_media_generation.py),
+        never via the generic GET /api/jobs?type=image|video the
+        frontend's "recent generations" panel actually calls on page
+        load — the exact route a live migration-lag bug was found on
+        (see app/main.py's _apply_pending_migrations for the incident:
+        a missing generation_jobs.error_type column made this route
+        500 for any populated image/video job row)."""
+        client, csrf = auth_client
+
+        image_resp = client.post(
+            "/api/generation/image", json={"prompt": "a red apple"}, headers={"X-CSRF-Token": csrf}
+        )
+        _poll_until_terminal(client, image_resp.json()["id"])
+        video_resp = client.post(
+            "/api/generation/video", json={"prompt": "a car driving"}, headers={"X-CSRF-Token": csrf}
+        )
+        _poll_until_terminal(client, video_resp.json()["id"])
+
+        image_jobs = client.get("/api/jobs?type=image")
+        assert image_jobs.status_code == 200
+        assert len(image_jobs.json()) == 1
+        assert image_jobs.json()[0]["type"] == "image"
+        assert image_jobs.json()[0]["error_type"] == "not_configured"
+
+        video_jobs = client.get("/api/jobs?type=video")
+        assert video_jobs.status_code == 200
+        assert len(video_jobs.json()) == 1
+        assert video_jobs.json()[0]["type"] == "video"
+        assert video_jobs.json()[0]["error_type"] == "not_configured"
+
+        all_jobs = client.get("/api/jobs")
+        assert all_jobs.status_code == 200
+        assert len(all_jobs.json()) == 2
+
     def test_get_nonexistent_job_returns_404(self, auth_client):
         client, _csrf = auth_client
         assert client.get("/api/jobs/00000000-0000-0000-0000-000000000000").status_code == 404
