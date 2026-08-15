@@ -141,9 +141,21 @@ class Settings(BaseSettings):
     obsidian_provider: Literal["local_vault"] = "local_vault"
     # Root directory containing one vault subdirectory per user
     # ({obsidian_vault_root}/{user_id}/). Relative paths are resolved
-    # against the backend process's working directory. Point this at a
-    # real synced Obsidian vault location in production.
+    # against the backend process's working directory. Only used when
+    # obsidian_vault_path (below) is not set.
     obsidian_vault_root: str = "../storage/obsidian_vaults"
+    # Optional override for single-user/personal deployments: point this
+    # directly at a real, already-existing Obsidian vault (e.g.
+    # "C:\Users\you\Documents\Obsidian Vault") and every user on this
+    # backend operates on that exact directory directly — no per-user
+    # UUID subfolder, no auto-provisioned scaffolding overwriting real
+    # notes (see app/integrations/obsidian/factory.py: provisioning only
+    # ever runs when the target directory doesn't already exist, so an
+    # existing vault's folders/notes are never touched). This
+    # deliberately trades away obsidian_vault_root's per-user isolation
+    # — do not set this on a backend shared by more than one real user.
+    # Leave unset (default) to keep the isolated-per-user architecture.
+    obsidian_vault_path: str | None = None
 
     # --- Audio / Transcription / Image / Video / Voice providers ---
     # Each is architected as interface + local/cloud factory + honest

@@ -1,9 +1,85 @@
+import uuid
+
 from app.integrations.claude.base import ProviderStatus
 from app.integrations.obsidian.factory import get_knowledge_provider, get_obsidian_provider
+from app.integrations.obsidian.local_vault_provider import LocalVaultProvider
 
 
 def test_get_knowledge_provider_is_an_alias_for_get_obsidian_provider():
     assert get_knowledge_provider is get_obsidian_provider
+
+
+class TestObsidianVaultPathOverride:
+    """OBSIDIAN_VAULT_PATH (app/core/config.py) lets a single-user
+    deployment point directly at a real, already-existing Obsidian vault
+    instead of the default per-user {obsidian_vault_root}/{user_id}/
+    layout — added for the master task's Part 2 (correct Obsidian vault
+    path). Default (unset) behavior must stay exactly as before, since
+    the whole rest of this file's isolation tests assume it."""
+
+    def test_default_unset_uses_per_user_nesting(self, tmp_path, monkeypatch):
+        from app.core.config import get_settings
+
+        settings = get_settings()
+        monkeypatch.setattr(settings, "obsidian_vault_root", str(tmp_path / "vaults"))
+        monkeypatch.setattr(settings, "obsidian_vault_path", None)
+
+        user_id = uuid.uuid4()
+        provider = get_obsidian_provider(user_id)
+        assert isinstance(provider, LocalVaultProvider)
+        assert provider.root == (tmp_path / "vaults" / str(user_id)).resolve()
+
+    def test_configured_override_ignores_per_user_nesting(self, tmp_path, monkeypatch):
+        """Two different user ids must resolve to the SAME directory when
+        the override is set — that's the whole point (a single real vault
+        shared by whoever's on this backend, per the master task's
+        explicit single-user-deployment intent)."""
+        from app.core.config import get_settings
+
+        settings = get_settings()
+        real_vault = tmp_path / "My Real Obsidian Vault"
+        monkeypatch.setattr(settings, "obsidian_vault_path", str(real_vault))
+
+        provider_a = get_obsidian_provider(uuid.uuid4())
+        provider_b = get_obsidian_provider(uuid.uuid4())
+        assert provider_a.root == real_vault.resolve()
+        assert provider_b.root == real_vault.resolve()
+
+    def test_existing_vault_contents_are_never_overwritten(self, tmp_path, monkeypatch):
+        """The core safety guarantee: pointing this at a real vault that
+        already has the user's own notes must not run the welcome-note/
+        folder-scaffolding provisioning over it — provisioning is
+        skipped entirely whenever the directory already exists."""
+        from app.core.config import get_settings
+
+        real_vault = tmp_path / "My Real Obsidian Vault"
+        real_vault.mkdir()
+        (real_vault / "My Existing Note.md").write_text("Content I already wrote by hand.")
+
+        settings = get_settings()
+        monkeypatch.setattr(settings, "obsidian_vault_path", str(real_vault))
+
+        get_obsidian_provider(uuid.uuid4())
+
+        assert (real_vault / "My Existing Note.md").read_text() == "Content I already wrote by hand."
+        # None of the app's own scaffolding folders were created alongside it.
+        assert not (real_vault / "00-System").exists()
+
+    def test_missing_vault_path_is_provisioned_not_crashed(self, tmp_path, monkeypatch):
+        """If OBSIDIAN_VAULT_PATH points at a directory that doesn't exist
+        yet, the app must provision it (folder scaffolding + welcome
+        note) rather than raising — matches the existing per-user
+        behavior, just applied to the configured single path."""
+        from app.core.config import get_settings
+
+        target = tmp_path / "not-created-yet"
+        settings = get_settings()
+        monkeypatch.setattr(settings, "obsidian_vault_path", str(target))
+
+        provider = get_obsidian_provider(uuid.uuid4())
+        assert target.exists()
+        assert (target / "00-System").exists()
+        assert provider.root == target.resolve()
 
 
 def test_status_auto_provisions_vault(auth_client):

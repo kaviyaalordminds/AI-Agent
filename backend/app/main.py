@@ -112,6 +112,33 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
     return response
 
 
+@app.on_event("startup")
+def _validate_obsidian_vault_path() -> None:
+    """OBSIDIAN_VAULT_PATH (see app/core/config.py, app/integrations/
+    obsidian/factory.py) is optional — most deployments leave it unset
+    and get the default per-user vault layout, which needs no validation
+    here. When it IS set (a single-user deployment pointed at a real
+    existing vault), report clearly at startup whether that directory is
+    actually reachable, without crashing the rest of the app if it
+    isn't: Obsidian being unavailable must never take down chat,
+    documents, or any other unrelated feature."""
+    if not settings.obsidian_vault_path:
+        return
+    from pathlib import Path
+
+    path = Path(settings.obsidian_vault_path)
+    if path.exists() and path.is_dir():
+        logger.info("OBSIDIAN_VAULT_PATH is configured and reachable: %s", path)
+    elif path.exists():
+        logger.warning("OBSIDIAN_VAULT_PATH exists but is not a directory: %s", path)
+    else:
+        logger.warning(
+            "OBSIDIAN_VAULT_PATH is configured but does not exist yet: %s — it will be "
+            "auto-provisioned (folder structure + welcome note) on first Obsidian request.",
+            path,
+        )
+
+
 app.include_router(auth_router, prefix=settings.api_prefix)
 app.include_router(users_router, prefix=settings.api_prefix)
 app.include_router(projects_router, prefix=settings.api_prefix)

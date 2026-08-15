@@ -310,20 +310,39 @@ Knowledge Gaps, and Documents is gated, and it fails honestly
 
 Unlike Claude, Obsidian works out of the box with no credentials — each
 user's vault is auto-created at `{OBSIDIAN_VAULT_ROOT}/{user_id}/` on
-first use. To point a user's account at a real, already-existing
-Obsidian vault (e.g. one synced via Obsidian Sync, iCloud, or Syncthing)
-instead of local storage:
+first use (multi-user default, real vaults per account, never one
+shared/global vault):
 
 ```bash
 # backend/.env
 OBSIDIAN_VAULT_ROOT=/path/to/a/directory/containing/one/vault/per/user
 ```
 
-The directory layout is `{OBSIDIAN_VAULT_ROOT}/{user_id}/` — for a
-single-user deployment you'd point a user's folder directly at their
-real vault. This is the same provider-abstraction pattern as Claude and
-email: `ObsidianProvider` is an interface, `LocalVaultProvider` is
-today's (fully functional) implementation, and a future MCP- or REST
+**Single-user/personal deployment:** if you're running this for
+yourself and want the app to operate directly on your own,
+already-existing Obsidian vault (e.g. one synced via Obsidian Sync,
+iCloud, or Syncthing) — folders, notes, and all — set `OBSIDIAN_VAULT_PATH`
+instead:
+
+```bash
+# backend/.env
+OBSIDIAN_VAULT_PATH=/path/to/My Obsidian Vault
+# Windows example:
+# OBSIDIAN_VAULT_PATH=C:\Users\you\Documents\Obsidian Vault
+```
+
+When set, every user on this backend reads/writes that exact directory
+directly — no per-user subfolder, and your existing folders/notes are
+never touched or overwritten (the app only ever creates its starter
+scaffolding when the target directory doesn't exist yet). This
+deliberately trades away per-user isolation, so only set it on a
+backend used by one real person. Leave it unset (the default) for any
+deployment with more than one user, which keeps `OBSIDIAN_VAULT_ROOT`'s
+per-user layout above.
+
+This is the same provider-abstraction pattern as Claude and email:
+`ObsidianProvider` is an interface, `LocalVaultProvider` is today's
+(fully functional) implementation, and a future MCP- or REST
 API-backed provider could be swapped in via `OBSIDIAN_PROVIDER` without
 touching call sites.
 
@@ -736,8 +755,8 @@ This repo follows the phased plan from the product spec:
 7. 🟡 **Creative tools** — image/audio/video/document/design generation. **Document generation is done**: AI-drafted content rendered to real Markdown/.docx/.pdf via `StorageProvider`, gated honestly by AI provider configuration. **Structured Word/PowerPoint/Excel generation is done**: `POST /api/generation/document/{word,ppt,excel}` render real .docx/.pptx/.xlsx files from caller-supplied structured content (headings/paragraphs/lists/tables; slides/bullets/notes; sheets/rows/formulas/charts) via `python-docx`/`python-pptx`/`openpyxl` — no AI provider required. **Local audio (TTS) generation is done**: real `espeak-ng`-backed synthesis through the job queue (`POST /api/jobs/audio`). **Image (OpenAI) and video (Gemini) generation are done, API-based only (no local/GPU option)**: `OpenAIImageProvider` (`/v1/images/generations`) and `GeminiVideoProvider` (Veo `:predictLongRunning` + poll + download) are real REST-based providers, selected by default (`IMAGE_PROVIDER`/`VIDEO_PROVIDER` default to `cloud`) — setting `OPENAI_API_KEY` (image) and `GEMINI_API_KEY`/`GOOGLE_API_KEY` (video) is the only configuration required, two independent credentials for two independent vendors; both run through the `GenerationJob` queue (`POST /api/generation/image`, `POST /api/generation/video`) with real status polling and download. Full provider architecture (interface + local/cloud factory + honest capability detection) exists for all five generation categories (Audio/Transcription/Image/Video/Voice) plus Deployment — Transcription/Voice cloning remain ⬜ for actual generation (each needs a real backend/GPU/model or a real external vendor integration), but report exactly why via `GET /api/system/capabilities` rather than pretending to work. Website/3D Website/Poster/Logo/Graphic Design generation itself remain ⬜.
 8. 🟡 **Developer Studio** — website/3D website generation, live preview, deployment. **Deployment architecture is done**: `DeploymentProvider` (`LocalDeploymentProvider` — real zip packaging, no credentials — plus Netlify/Vercel architecture points) is ready for website generation to use once built; website generation itself remains ⬜.
 9. 🟡 **Integration** — projects ↔ knowledge ↔ history ↔ files ↔ AI context ↔ activity log. **Production-readiness architecture** (landed alongside Phase 7): local/production runtime-mode switching (`AI_RUNTIME_MODE`), a real generation job queue (`GenerationJob` + `JobQueue` + `InProcessJobQueue`, Celery/RQ-swappable, and Image/Video generation already run through it), the Capability API (`GET /api/system/capabilities`) and Health API (`GET /health`, `GET /api/system/providers/health`), a System Status frontend page + Settings tabs, and technical rate-limiting/concurrency/upload-size protection (no user-visible credit system). **Cross-module wiring is done**: every artifact type (`HistoryEntry`, `Document`, `GenerationJob`, `Conversation`, `KnowledgeAnalysis`) already carried an optional `project_id` at the database/API level, but the project workspace UI only exposed History — its Chat/Knowledge/Files tabs were stale placeholders. They're now real: **Files** lists the project's documents and generated media with download links (`GET /documents?project_id=`, `GET /jobs?project_id=`); **Knowledge** lists the project's gap analyses with a deep link to run a new one pre-scoped to the project (`GET /knowledge/gaps?project_id=`, `knowledge-gaps.html?project_id=`); **Chat** lists the project's conversations with deep links into `agent.html` (`?conversation=` opens one directly, `?project_id=` pre-scopes the "new chat" modal to Project mode). **AI context is real, not just name/description**: a Project-mode (or any project-scoped) conversation's system prompt now includes the project's most recent `HistoryEntry` activity (documents, generated media, knowledge updates — chat excluded) via `_build_project_activity_context` in `app/agents/orchestrator.py`, so Claude is aware of what's actually happened in the project without the user re-explaining it. "Activity log" was never a separate concept from History — that item is resolved by definition. Remaining integration work: a persistent-broker `JobQueue` implementation for true multi-worker production scaling, and a Documents Studio project filter (the backend already supports `?project_id=` on `GET /documents`; the standalone Documents page doesn't expose it yet — only the project workspace's Files tab does).
-10. ⬜ **Testing** — expanded integration/E2E/security test coverage
-11. ⬜ **Final polish** — performance, accessibility, full responsive/theme QA
+10. ✅ **Testing** — expanded integration/E2E/security test coverage: CSRF-rejection coverage for every previously-untested state-changing endpoint, real exercise of every rate-limit bucket, session-cookie attribute/expiry/production-validator coverage, cross-user ownership isolation for documents/jobs/media/Obsidian write ops, secrets-never-leak coverage generalized across every provider credential (including the error-message path), and a true multi-module signup-to-chat E2E journey test. Found and fixed 2 real bugs along the way (`DELETE /api/documents/{id}` was missing CSRF protection; an oversized video reference image crashed to a raw 500 instead of a clean 413).
+11. 🟡 **Final polish** — performance, accessibility, full responsive/theme QA. Backend: honest secret-free error handling on every generation path, `OBSIDIAN_VAULT_PATH` single-vault override for personal deployments, startup-time config validation (non-crashing). Frontend: no known accessibility/responsive regressions found in this pass. See the "Final polish (Phase 11)" section below for what was checked and what remains open.
 
 Each phase is expected to land as real, working, end-to-end functionality
 — never a UI-only mockup — consistent with the project's "no placeholder
