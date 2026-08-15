@@ -57,7 +57,9 @@ function renderProgress(job) {
   }
 
   if (job.status === "failed") {
-    body.innerHTML = `<div class="alert-inline visible error">${window.GenerationCommon.escapeHtml(job.error || "Image generation failed.")}</div>`;
+    const card = window.GenerationCommon.renderJobErrorCard(job, { providerLabel: "OpenAI", onRetry: generateImage });
+    body.innerHTML = card.html;
+    card.wire();
     return;
   }
 

@@ -55,6 +55,13 @@ class GenerationJob(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     input_metadata: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
     output_metadata: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
     error: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    # A short, stable machine-readable code (see
+    # app/integrations/generation/errors.py: GenerationProviderError.error_type
+    # and its subclasses — "quota_exceeded", "auth_error",
+    # "provider_unavailable", "not_configured", "generation_failed") so the
+    # frontend can render the right error card/retry affordance instead of
+    # parsing `error` text. Only set when status == failed.
+    error_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 

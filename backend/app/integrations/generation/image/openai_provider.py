@@ -4,7 +4,12 @@ import logging
 import httpx
 
 from app.integrations.capability import CapabilityStatus
-from app.integrations.generation.errors import GenerationProviderNotConfiguredError, GenerationProviderRequestError
+from app.integrations.generation.errors import (
+    GenerationProviderNotConfiguredError,
+    GenerationProviderRequestError,
+    GenerationProviderUnavailableError,
+    classify_http_error,
+)
 from app.integrations.generation.image.base import GeneratedImage, ImageProvider
 
 logger = logging.getLogger("app.integrations.generation.image")
@@ -67,11 +72,12 @@ class OpenAIImageProvider(ImageProvider):
                 response = await client.post(_API_URL, json=body, headers=headers)
         except httpx.RequestError as exc:
             logger.warning("OpenAI image: request failed: %s", exc)
-            raise GenerationProviderRequestError(f"Could not reach the OpenAI API: {exc}") from exc
+            raise GenerationProviderUnavailableError(f"Could not reach the OpenAI API: {exc}") from exc
 
         if response.status_code != 200:
             logger.warning("OpenAI image: request returned status %s", response.status_code)
-            raise GenerationProviderRequestError(
+            error_cls = classify_http_error(response.status_code, response.text)
+            raise error_cls(
                 f"OpenAI image generation failed ({response.status_code}): {response.text[:300]}"
             )
 
@@ -106,10 +112,11 @@ class OpenAIImageProvider(ImageProvider):
                 response = await client.get(url)
         except httpx.RequestError as exc:
             logger.warning("OpenAI image: download failed: %s", exc)
-            raise GenerationProviderRequestError(f"Could not download the generated image: {exc}") from exc
+            raise GenerationProviderUnavailableError(f"Could not download the generated image: {exc}") from exc
         if response.status_code != 200:
             logger.warning("OpenAI image: download returned status %s", response.status_code)
-            raise GenerationProviderRequestError(f"Downloading the generated image failed ({response.status_code}).")
+            error_cls = classify_http_error(response.status_code, response.text)
+            raise error_cls(f"Downloading the generated image failed ({response.status_code}).")
         return response.content
 
 

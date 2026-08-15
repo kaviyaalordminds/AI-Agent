@@ -143,3 +143,19 @@
   margin-bottom: 1.1rem;
 }
 .capability-banner i { margin-top: 0.15rem; }
+
+/* --- Structured error card for a failed generation job (quota
+   exceeded, auth error, provider unavailable, not configured) — see
+   window.GenerationCommon.renderJobErrorCard in generation-common.js --- */
+.gen-error-card {
+  display: flex; gap: 0.85rem; align-items: flex-start;
+  padding: 1rem 1.1rem;
+  border-radius: var(--radius-md);
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+.gen-error-card .gen-error-icon { font-size: 1.3rem; margin-top: 0.1rem; flex-shrink: 0; }
+.gen-error-card .gen-error-body { flex: 1; min-width: 0; }
+.gen-error-card .gen-error-title { font-weight: 600; font-size: 0.92rem; margin-bottom: 0.25rem; }
+.gen-error-card .gen-error-message { font-size: 0.85rem; opacity: 0.92; word-break: break-word; }
+.gen-error-card .gen-error-retry-btn { color: #fff; }

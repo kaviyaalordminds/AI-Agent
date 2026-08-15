@@ -13,7 +13,11 @@ import zipfile
 import pytest
 
 from app.integrations.capability import CapabilityStatus
-from app.integrations.generation.errors import GenerationProviderNotConfiguredError, GenerationProviderRequestError
+from app.integrations.generation.errors import (
+    GenerationProviderNotConfiguredError,
+    GenerationProviderQuotaExceededError,
+    GenerationProviderRequestError,
+)
 from app.integrations.generation.image.base import GeneratedImage, ImageProvider
 from app.integrations.generation.video.base import GeneratedVideo, VideoProvider
 
@@ -30,23 +34,37 @@ def _poll_until_terminal(client, url, timeout=5.0):
 
 
 class _FakeImageProvider(ImageProvider):
-    def __init__(self, data: bytes = b"\x89PNG\r\n\x1a\nfake-png-bytes", fail: bool = False):
+    def __init__(
+        self,
+        data: bytes = b"\x89PNG\r\n\x1a\nfake-png-bytes",
+        fail: bool = False,
+        fail_with: Exception | None = None,
+    ):
         self._data = data
         self._fail = fail
+        self._fail_with = fail_with
 
     def capability(self) -> CapabilityStatus:
         return CapabilityStatus(available=True, provider="fake-openai", mode="production", reason="configured")
 
     async def generate(self, prompt: str, width: int = 1024, height: int = 1024) -> GeneratedImage:
+        if self._fail_with is not None:
+            raise self._fail_with
         if self._fail:
             raise GenerationProviderRequestError("Fake OpenAI image generation failed.")
         return GeneratedImage(data=self._data, format="png", content_type="image/png", width=width, height=height)
 
 
 class _FakeVideoProvider(VideoProvider):
-    def __init__(self, data: bytes = b"fake-mp4-bytes", fail: bool = False):
+    def __init__(
+        self,
+        data: bytes = b"fake-mp4-bytes",
+        fail: bool = False,
+        fail_with: Exception | None = None,
+    ):
         self._data = data
         self._fail = fail
+        self._fail_with = fail_with
         self.last_reference_image: bytes | None = None
 
     def capability(self) -> CapabilityStatus:
@@ -56,6 +74,8 @@ class _FakeVideoProvider(VideoProvider):
         self, prompt: str, duration_seconds: float = 4.0, reference_image: bytes | None = None
     ) -> GeneratedVideo:
         self.last_reference_image = reference_image
+        if self._fail_with is not None:
+            raise self._fail_with
         if self._fail:
             raise GenerationProviderRequestError("Fake Gemini video generation failed.")
         return GeneratedVideo(data=self._data, format="mp4", content_type="video/mp4", duration_seconds=duration_seconds)
@@ -112,6 +132,31 @@ class TestImageGenerationEndpoint:
         job = _poll_until_terminal(client, f"/api/generation/image/{resp.json()['id']}")
         assert job["status"] == "failed"
         assert job["error"]
+        assert job["error_type"] == "not_configured"
+
+    def test_quota_exceeded_is_recorded_with_structured_error_type(self, auth_client, monkeypatch):
+        """A 429 from OpenAI (real symptom: 'credit_balance_exhausted')
+        must never crash the backend or the job — it lands as a `failed`
+        job with error_type='quota_exceeded' so the frontend can render a
+        dedicated quota-exceeded card with a Retry button instead of a
+        generic failure message."""
+        client, csrf = auth_client
+        import app.jobs.worker as worker_module
+
+        fake = _FakeImageProvider(
+            fail_with=GenerationProviderQuotaExceededError(
+                "OpenAI image generation failed (429): insufficient_quota"
+            )
+        )
+        monkeypatch.setattr(worker_module, "get_image_provider", lambda: fake)
+
+        resp = client.post("/api/generation/image", json={"prompt": "a red bicycle"}, headers={"X-CSRF-Token": csrf})
+        assert resp.status_code == 202
+        job = _poll_until_terminal(client, f"/api/generation/image/{resp.json()['id']}")
+        assert job["status"] == "failed"
+        assert job["error_type"] == "quota_exceeded"
+        assert "429" in job["error"]
+        assert "insufficient_quota" in job["error"]
 
     def test_succeeds_with_configured_provider_and_is_downloadable(self, auth_client, monkeypatch):
         client, csrf = auth_client
@@ -225,6 +270,29 @@ class TestVideoGenerationEndpoint:
         job = _poll_until_terminal(client, f"/api/generation/video/{resp.json()['id']}")
         assert job["status"] == "failed"
         assert job["error"]
+        assert job["error_type"] == "not_configured"
+
+    def test_quota_exceeded_is_recorded_with_structured_error_type(self, auth_client, monkeypatch):
+        """A 429 from Gemini (real symptom: quota exceeded) must never
+        crash the backend or the job — it lands as a `failed` job with
+        error_type='quota_exceeded' so the frontend can render a
+        dedicated quota-exceeded card with a Retry button."""
+        client, csrf = auth_client
+        import app.jobs.worker as worker_module
+
+        fake = _FakeVideoProvider(
+            fail_with=GenerationProviderQuotaExceededError(
+                "Gemini video generation request failed (429): RESOURCE_EXHAUSTED"
+            )
+        )
+        monkeypatch.setattr(worker_module, "get_video_provider", lambda: fake)
+
+        resp = client.post("/api/generation/video", json={"prompt": "a drone shot"}, headers={"X-CSRF-Token": csrf})
+        assert resp.status_code == 202
+        job = _poll_until_terminal(client, f"/api/generation/video/{resp.json()['id']}")
+        assert job["status"] == "failed"
+        assert job["error_type"] == "quota_exceeded"
+        assert "429" in job["error"]
 
     def test_succeeds_with_configured_provider_and_is_downloadable(self, auth_client, monkeypatch):
         client, csrf = auth_client
@@ -279,6 +347,7 @@ class TestVideoGenerationEndpoint:
         job = _poll_until_terminal(client, f"/api/generation/video/{resp.json()['id']}")
         assert job["status"] == "failed"
         assert "failed" in job["error"].lower()
+        assert job["error_type"] == "generation_failed"
 
     def test_invalid_project_id_returns_404(self, auth_client):
         client, csrf = auth_client

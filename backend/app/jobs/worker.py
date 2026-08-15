@@ -131,6 +131,7 @@ async def run_job(job_id: uuid.UUID) -> None:
             logger.warning("job %s (%s) failed: %s", job_id, job.type.value, exc)
             job.status = JobStatus.failed
             job.error = str(exc)
+            job.error_type = getattr(exc, "error_type", "generation_failed")
             job.completed_at = utcnow()
             _log_history(db, job, HistoryEntryStatus.failed)
             db.commit()
@@ -139,6 +140,7 @@ async def run_job(job_id: uuid.UUID) -> None:
             logger.exception("Unexpected error running job %s (%s)", job_id, job.type.value)
             job.status = JobStatus.failed
             job.error = "An unexpected error occurred while processing this job."
+            job.error_type = "generation_failed"
             job.completed_at = utcnow()
             _log_history(db, job, HistoryEntryStatus.failed)
             db.commit()

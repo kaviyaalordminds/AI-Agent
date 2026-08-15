@@ -67,7 +67,9 @@ function renderProgress(job) {
   }
 
   if (job.status === "failed") {
-    body.innerHTML = `<div class="alert-inline visible error">${window.GenerationCommon.escapeHtml(job.error || "Video generation failed.")}</div>`;
+    const card = window.GenerationCommon.renderJobErrorCard(job, { providerLabel: "Gemini", onRetry: generateVideo });
+    body.innerHTML = card.html;
+    card.wire();
     return;
   }
 

@@ -5,11 +5,19 @@ import httpx
 import pytest
 
 from app.integrations.generation.audio.factory import get_audio_provider
-from app.integrations.generation.errors import GenerationProviderNotConfiguredError, GenerationProviderRequestError
+from app.integrations.generation.errors import (
+    GenerationProviderAuthError,
+    GenerationProviderNotConfiguredError,
+    GenerationProviderQuotaExceededError,
+    GenerationProviderRequestError,
+    GenerationProviderUnavailableError,
+    classify_http_error,
+)
 from app.integrations.generation.image.factory import get_image_provider
 from app.integrations.generation.image.openai_provider import OpenAIImageProvider
 from app.integrations.generation.transcription.factory import get_transcription_provider
 from app.integrations.generation.video.factory import get_video_provider
+from app.integrations.generation.video.gemini_provider import GeminiVideoProvider
 from app.integrations.generation.voice.factory import get_voice_provider
 
 
@@ -168,6 +176,124 @@ class TestOpenAIImageProviderRequestFormat:
         )
         with pytest.raises(GenerationProviderRequestError, match="400"):
             await provider.generate("a red apple")
+
+    @pytest.mark.asyncio
+    async def test_429_raises_quota_exceeded(self):
+        """The real symptom reported against the live API:
+        'credit_balance_exhausted' on a 429 — must classify as
+        quota_exceeded, not a generic failure, so the frontend can show
+        the right card."""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                429,
+                json={"error": {"message": "You exceeded your current quota.", "code": "insufficient_quota"}},
+            )
+
+        provider = OpenAIImageProvider(
+            api_key="test-key", model="gpt-image-1", transport=httpx.MockTransport(handler)
+        )
+        with pytest.raises(GenerationProviderQuotaExceededError):
+            await provider.generate("a red apple")
+
+    @pytest.mark.asyncio
+    async def test_401_raises_auth_error(self):
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(401, json={"error": {"message": "Invalid API key.", "code": "invalid_api_key"}})
+
+        provider = OpenAIImageProvider(
+            api_key="bad-key", model="gpt-image-1", transport=httpx.MockTransport(handler)
+        )
+        with pytest.raises(GenerationProviderAuthError):
+            await provider.generate("a red apple")
+
+    @pytest.mark.asyncio
+    async def test_network_failure_raises_provider_unavailable(self):
+        def handler(request: httpx.Request) -> httpx.Response:
+            raise httpx.ConnectError("connection refused")
+
+        provider = OpenAIImageProvider(
+            api_key="test-key", model="gpt-image-1", transport=httpx.MockTransport(handler)
+        )
+        with pytest.raises(GenerationProviderUnavailableError):
+            await provider.generate("a red apple")
+
+
+class TestGeminiVideoProviderErrorClassification:
+    """Same classification contract as OpenAI image (see above), applied
+    to the Gemini video provider — including the case unique to Veo's
+    long-running-operation API: the HTTP call itself can return 200 while
+    the operation payload carries its own error (quota exhaustion
+    surfaces this way as often as via a direct HTTP 429)."""
+
+    @pytest.mark.asyncio
+    async def test_429_on_submit_raises_quota_exceeded(self):
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                429,
+                json={"error": {"code": 429, "message": "Quota exceeded.", "status": "RESOURCE_EXHAUSTED"}},
+            )
+
+        provider = GeminiVideoProvider(api_key="test-key", model="veo-3.1-generate-preview")
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            with pytest.raises(GenerationProviderQuotaExceededError):
+                await provider._submit(client, {"prompt": "a car"})
+
+    @pytest.mark.asyncio
+    async def test_operation_embedded_quota_error_raises_quota_exceeded(self):
+        """The HTTP status is 200 (the poll request itself succeeded) but
+        the operation body says the generation failed with a
+        RESOURCE_EXHAUSTED code — this must still classify as
+        quota_exceeded, not a generic failure."""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                json={
+                    "done": True,
+                    "error": {"code": 429, "message": "Quota exceeded.", "status": "RESOURCE_EXHAUSTED"},
+                },
+            )
+
+        provider = GeminiVideoProvider(api_key="test-key", model="veo-3.1-generate-preview")
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            with pytest.raises(GenerationProviderQuotaExceededError):
+                await provider._poll_until_done(client, "operations/fake-op-id")
+
+    @pytest.mark.asyncio
+    async def test_404_on_submit_raises_generic_request_error_not_unavailable(self):
+        """A 404 (e.g. an unsupported/retired model name — the exact
+        veo-2.0-generate-001 bug this was fixed for) is a request problem,
+        not a vendor outage — must stay a generic GenerationProviderRequestError,
+        not provider_unavailable."""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(404, json={"error": {"code": 404, "message": "model not found", "status": "NOT_FOUND"}})
+
+        provider = GeminiVideoProvider(api_key="test-key", model="veo-2.0-generate-001")
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            with pytest.raises(GenerationProviderRequestError) as excinfo:
+                await provider._submit(client, {"prompt": "a car"})
+            assert excinfo.value.error_type == "generation_failed"
+
+
+class TestClassifyHttpError:
+    def test_429_is_quota_exceeded(self):
+        assert classify_http_error(429, "") is GenerationProviderQuotaExceededError
+
+    def test_401_and_403_are_auth_error(self):
+        assert classify_http_error(401, "") is GenerationProviderAuthError
+        assert classify_http_error(403, "") is GenerationProviderAuthError
+
+    def test_5xx_is_provider_unavailable(self):
+        assert classify_http_error(500, "") is GenerationProviderUnavailableError
+        assert classify_http_error(503, "") is GenerationProviderUnavailableError
+
+    def test_quota_keyword_in_400_body_is_still_quota_exceeded(self):
+        assert classify_http_error(400, '{"error": "credit_balance_exhausted"}') is GenerationProviderQuotaExceededError
+
+    def test_plain_400_is_generic_request_error(self):
+        assert classify_http_error(400, '{"error": "unknown_parameter"}') is GenerationProviderRequestError
 
 
 class TestProviderFailureIsolation:

@@ -25,6 +25,7 @@ class JobOut(BaseModel):
     input_metadata: dict
     output_metadata: dict
     error: str | None
+    error_type: str | None
     created_at: datetime
     started_at: datetime | None
     completed_at: datetime | None

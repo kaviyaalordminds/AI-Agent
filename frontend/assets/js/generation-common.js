@@ -99,6 +99,51 @@ function genRenderCapabilityBanner(bannerId, capability) {
   return false;
 }
 
+/* A failed GenerationJob carries a structured `error_type` (see
+ * backend app/integrations/generation/errors.py) so this card can show
+ * the actual cloud-provider problem — quota exhausted, bad/revoked
+ * credential, vendor outage, or not configured — instead of one generic
+ * "generation failed" message for every case. */
+const GEN_ERROR_TYPE_META = {
+  quota_exceeded: { icon: "bi-hourglass-bottom", title: "Quota exceeded" },
+  auth_error: { icon: "bi-key-fill", title: "Authentication error" },
+  provider_unavailable: { icon: "bi-cloud-slash", title: "Provider unavailable" },
+  not_configured: { icon: "bi-gear-fill", title: "Not configured" },
+};
+
+/* Renders a failed job as a professional error card: provider name,
+ * a title specific to what actually went wrong, the real (non-secret)
+ * message from the provider, and — unless the failure is "not
+ * configured" (nothing to retry until an admin sets a key) — a Retry
+ * button wired to `onRetry`. Never clears the surrounding page and never
+ * touches auth/session state; a generation failure is never a reason to
+ * redirect to login. */
+function genRenderJobErrorCard(job, { providerLabel, onRetry } = {}) {
+  const meta = GEN_ERROR_TYPE_META[job.error_type] || { icon: "bi-exclamation-triangle-fill", title: "Generation failed" };
+  const titleSuffix = providerLabel ? ` — ${genEscapeHtml(providerLabel)}` : "";
+  const showRetry = Boolean(onRetry) && job.error_type !== "not_configured";
+  const retryBtnId = `gen-error-retry-${Math.random().toString(36).slice(2, 8)}`;
+
+  const html = `
+    <div class="gen-error-card">
+      <div class="gen-error-icon"><i class="bi ${meta.icon}"></i></div>
+      <div class="gen-error-body">
+        <div class="gen-error-title">${meta.title}${titleSuffix}</div>
+        <div class="gen-error-message">${genEscapeHtml(job.error || "Generation failed.")}</div>
+        ${showRetry ? `<button type="button" class="btn-brand gen-error-retry-btn" id="${retryBtnId}" style="margin-top:0.75rem; padding:0.4rem 0.9rem; font-size:0.82rem;"><i class="bi bi-arrow-clockwise"></i> Retry</button>` : ""}
+      </div>
+    </div>`;
+
+  return {
+    html,
+    wire() {
+      if (!showRetry) return;
+      const btn = document.getElementById(retryBtnId);
+      if (btn) btn.addEventListener("click", onRetry);
+    },
+  };
+}
+
 window.GenerationCommon = {
   escapeHtml: genEscapeHtml,
   formatDate: genFormatDate,
@@ -107,4 +152,5 @@ window.GenerationCommon = {
   pollJob: genPollJob,
   loadProjectOptions: genLoadProjectOptions,
   renderCapabilityBanner: genRenderCapabilityBanner,
+  renderJobErrorCard: genRenderJobErrorCard,
 };
