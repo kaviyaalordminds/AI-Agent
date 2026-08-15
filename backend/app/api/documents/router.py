@@ -1,7 +1,7 @@
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.core.config import get_settings
 from app.database.session import get_db
@@ -55,7 +55,9 @@ def list_documents(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    query = db.query(Document).filter(Document.user_id == user.id)
+    # joinedload avoids an N+1 (one SELECT per row) that _to_document_out's
+    # document.project.name lazy-load would otherwise trigger.
+    query = db.query(Document).options(joinedload(Document.project)).filter(Document.user_id == user.id)
     if project_id is not None:
         query = query.filter(Document.project_id == project_id)
     documents = query.order_by(Document.created_at.desc()).all()

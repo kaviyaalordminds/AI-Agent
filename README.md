@@ -380,6 +380,70 @@ detection, never a hard-coded "working" state:
   until a real vendor integration lands (architecture point — see
   `app/integrations/generation/voice/cloud_provider.py`).
 
+### Final polish (Phase 11): performance, accessibility, responsive
+
+An evidence-based audit (file:line, not a guess) across the frontend
+pages/CSS and every list-returning backend router, followed by fixing
+what it found:
+
+**Performance**
+- `GET /history`, `/documents`, `/knowledge/gaps`, and `/agent/conversations`
+  each resolved `project_name` via a lazy-loaded `entry.project` per row
+  — one extra SELECT per row in the response, not one query total.
+  Fixed with `.options(joinedload(...))` on all four.
+- Added a composite `(user_id, sort_column)` index on `history_entries`,
+  `documents`, `generation_jobs`, `conversations`, `knowledge_analyses`,
+  and `projects` — every one of those tables' list endpoint filters by
+  `user_id` then orders by that same paired column, so the existing
+  single-column indexes still left the sort to run in memory once a
+  user's row count grows.
+
+**Accessibility**
+- Icon-only buttons (mobile sidebar/conversation-list/note-list
+  toggles across all 17 pages that have them, chat send, command-bar
+  submit, project card's "⋮" menu, history delete) now carry
+  `aria-label`/`title`.
+- Previously-unlabeled search/filter inputs (dashboard command bar,
+  Obsidian vault search + folder filter, History's search/type/status/
+  project filters) got `aria-label`; fixed one `<label for=…>` that
+  didn't match its input's `id` (Video Generation's reference-image
+  field).
+- Toast notifications (every success/error message app-wide) are now
+  `role="status"` + `aria-live="polite"` — previously invisible to
+  screen readers.
+- Two real WCAG AA contrast failures in light mode, computed directly
+  against the app's own token values (not eyeballed): plain links at
+  2.74:1 and `--text-muted` at 3.28:1, both against `--bg-canvas`
+  (AA requires 4.5:1 for normal-size text). Fixed via a dedicated
+  `--link-color` token (unchanged in dark mode, which already passed at
+  ~6.6:1) and a darker `--text-muted`; both now clear 4.5:1+, verified
+  by the same formula, not just "looks fine."
+- Bootstrap 5's own modal JS already handles `role="dialog"`/
+  `aria-modal`/focus-trapping correctly for every modal in the app — no
+  fix needed there.
+
+**Responsive**
+- `.split-view` (the shared two-pane layout every split-screen
+  workspace page uses — Chat/Knowledge tabs, Obsidian editor, etc.) had
+  no breakpoint at all, so a desktop-tuned `--split-ratio` percentage
+  squeezed both panes to an unusably narrow column on a phone. Added a
+  `@media (max-width: 900px)` rule that stacks it top/bottom, matching
+  the breakpoint `agent.css`/`obsidian.css` already use for their own
+  list+detail layouts.
+
+**Intentionally not changed in this pass** (audited, found not to be
+real issues, or out of scope for "polish" rather than "redesign"):
+hardcoded hex colors in page-specific CSS were checked individually —
+every instance found is paired with a fixed brand-gradient or
+permanently-dark decorative background that's the same color in both
+themes by design, not a theme-breakage bug. Streaming large file
+downloads (currently buffered fully in memory per request in
+`LocalStorageProvider.read`/`build_download_response`) is a real,
+larger architectural change — deferred rather than rushed, since
+`StorageProvider` is designed to be swappable to a future S3/GCS
+backend where "stream from a local path" doesn't directly apply the
+same way.
+
 ## Architecture
 
 ```
@@ -756,7 +820,7 @@ This repo follows the phased plan from the product spec:
 8. 🟡 **Developer Studio** — website/3D website generation, live preview, deployment. **Deployment architecture is done**: `DeploymentProvider` (`LocalDeploymentProvider` — real zip packaging, no credentials — plus Netlify/Vercel architecture points) is ready for website generation to use once built; website generation itself remains ⬜.
 9. 🟡 **Integration** — projects ↔ knowledge ↔ history ↔ files ↔ AI context ↔ activity log. **Production-readiness architecture** (landed alongside Phase 7): local/production runtime-mode switching (`AI_RUNTIME_MODE`), a real generation job queue (`GenerationJob` + `JobQueue` + `InProcessJobQueue`, Celery/RQ-swappable, and Image/Video generation already run through it), the Capability API (`GET /api/system/capabilities`) and Health API (`GET /health`, `GET /api/system/providers/health`), a System Status frontend page + Settings tabs, and technical rate-limiting/concurrency/upload-size protection (no user-visible credit system). **Cross-module wiring is done**: every artifact type (`HistoryEntry`, `Document`, `GenerationJob`, `Conversation`, `KnowledgeAnalysis`) already carried an optional `project_id` at the database/API level, but the project workspace UI only exposed History — its Chat/Knowledge/Files tabs were stale placeholders. They're now real: **Files** lists the project's documents and generated media with download links (`GET /documents?project_id=`, `GET /jobs?project_id=`); **Knowledge** lists the project's gap analyses with a deep link to run a new one pre-scoped to the project (`GET /knowledge/gaps?project_id=`, `knowledge-gaps.html?project_id=`); **Chat** lists the project's conversations with deep links into `agent.html` (`?conversation=` opens one directly, `?project_id=` pre-scopes the "new chat" modal to Project mode). **AI context is real, not just name/description**: a Project-mode (or any project-scoped) conversation's system prompt now includes the project's most recent `HistoryEntry` activity (documents, generated media, knowledge updates — chat excluded) via `_build_project_activity_context` in `app/agents/orchestrator.py`, so Claude is aware of what's actually happened in the project without the user re-explaining it. "Activity log" was never a separate concept from History — that item is resolved by definition. Remaining integration work: a persistent-broker `JobQueue` implementation for true multi-worker production scaling, and a Documents Studio project filter (the backend already supports `?project_id=` on `GET /documents`; the standalone Documents page doesn't expose it yet — only the project workspace's Files tab does).
 10. ✅ **Testing** — expanded integration/E2E/security test coverage: CSRF-rejection coverage for every previously-untested state-changing endpoint, real exercise of every rate-limit bucket, session-cookie attribute/expiry/production-validator coverage, cross-user ownership isolation for documents/jobs/media/Obsidian write ops, secrets-never-leak coverage generalized across every provider credential (including the error-message path), and a true multi-module signup-to-chat E2E journey test. Found and fixed 2 real bugs along the way (`DELETE /api/documents/{id}` was missing CSRF protection; an oversized video reference image crashed to a raw 500 instead of a clean 413).
-11. 🟡 **Final polish** — performance, accessibility, full responsive/theme QA. Backend: honest secret-free error handling on every generation path, `OBSIDIAN_VAULT_PATH` single-vault override for personal deployments, startup-time config validation (non-crashing). Frontend: no known accessibility/responsive regressions found in this pass. See the "Final polish (Phase 11)" section below for what was checked and what remains open.
+11. ✅ **Final polish** — performance, accessibility, full responsive/theme QA. **Performance**: eliminated an N+1 query (one extra SELECT per row) on every list endpoint that resolves a `project_name` (History/Documents/Knowledge gaps/AI Chat conversations) via `joinedload`; added composite `(user_id, sort_column)` indexes on all six user-scoped tables so their `WHERE user_id = ... ORDER BY ...` list queries can be satisfied from an index instead of an in-memory sort as row counts grow. **Accessibility**: every icon-only button (sidebar/list toggles, send/submit, project menu, history delete) now has `aria-label`/`title`; every previously-unlabeled filter/search input got an `aria-label`; fixed one `<label for>` mismatch; toast notifications are now `role="status"`/`aria-live="polite"` so they're announced to screen readers; computed two real WCAG AA contrast failures in light mode (plain links at 2.74:1, `--text-muted` at 3.28:1 against the app's own token values, not eyeballed) and fixed both — dark mode already passed. **Responsive**: `.split-view` (used by every split-screen workspace page) had no breakpoint at all and squeezed both panes to an unusable width on mobile; added one that stacks it top/bottom below 900px, matching the treatment `agent.css`/`obsidian.css` already give their own list+detail layouts. See "Final polish (Phase 11)" below for the full list and what's intentionally deferred.
 
 Each phase is expected to land as real, working, end-to-end functionality
 — never a UI-only mockup — consistent with the project's "no placeholder

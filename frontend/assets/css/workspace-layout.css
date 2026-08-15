@@ -121,3 +121,28 @@
 .workspace-fullscreen-active .app-content {
   padding: 0;
 }
+
+/* Below 900px (matches the breakpoint agent.css/obsidian.css already use
+   for their own list+detail layouts), every .split-view stacks
+   top/bottom regardless of the --split-ratio percentage a desktop drag
+   left it at or whether .split-stacked was set — a percentage tuned for
+   a wide desktop pane otherwise squeezes each side into an unusably
+   narrow column on a phone (found on project-workspace.html's Chat tab,
+   which never opts into .split-stacked, but this fixes every .split-view
+   instance app-wide, not just that one). The divider becomes
+   non-interactive here since drag-resizing two ~45vh panes on a touch
+   screen isn't a usable interaction anyway. */
+@media (max-width: 900px) {
+  .split-view {
+    grid-template-columns: 1fr !important;
+    grid-template-rows: minmax(0, 45vh) 8px minmax(0, 1fr);
+  }
+  .split-view .split-pane-a {
+    border-right: none;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+  .split-view .split-divider {
+    cursor: default;
+    pointer-events: none;
+  }
+}

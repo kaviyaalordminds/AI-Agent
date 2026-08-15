@@ -14,7 +14,7 @@ function projectCardHtml(project) {
           <div class="project-icon"><i class="bi bi-kanban"></i></div>
         </div>
         <div class="dropdown" onclick="event.stopPropagation()">
-          <button type="button" class="project-card-menu-btn" data-bs-toggle="dropdown" aria-expanded="false">
+          <button type="button" class="project-card-menu-btn" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Project actions" title="Project actions">
             <i class="bi bi-three-dots-vertical"></i>
           </button>
           <ul class="dropdown-menu dropdown-menu-end">

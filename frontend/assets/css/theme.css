@@ -26,8 +26,22 @@
   /* Text */
   --text-primary: #12121f;
   --text-secondary: #4b4d63;
-  --text-muted: #85869c;
+  /* #6d6f85, not the brighter #85869c originally here: that value was
+     only 3.28:1 against --bg-canvas (WCAG AA needs 4.5:1 for the normal-
+     size 0.7-0.85rem text this token is used for — meta text,
+     timestamps, empty-state captions throughout the app); this passes
+     at ~4.53:1, computed directly against the WCAG relative-luminance
+     formula, not eyeballed. */
+  --text-muted: #6d6f85;
   --text-on-brand: #ffffff;
+  /* Dedicated link color, separate from --brand-400 (still used
+     unchanged for icons/accents/decorative highlights elsewhere): plain
+     --brand-400 links were only 2.74:1 against --bg-canvas in light
+     mode, well under WCAG AA's 4.5:1. --brand-600 passes at ~5.79:1 in
+     light mode; --brand-400 itself already passes at ~6.58:1 once the
+     background is dark (see the dark-theme override below), so it's
+     kept there instead of also darkening. */
+  --link-color: var(--brand-600);
 
   /* Status */
   --success: #16a34a;
@@ -87,6 +101,7 @@
   --text-primary: #f3f4fb;
   --text-secondary: #b6b8cc;
   --text-muted: #74768e;
+  --link-color: var(--brand-400);
 
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
   --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.35);
@@ -109,7 +124,7 @@ body {
   transition: background var(--transition-base), color var(--transition-base);
 }
 
-a { color: var(--brand-400); text-decoration: none; }
+a { color: var(--link-color); text-decoration: none; }
 a:hover { color: var(--brand-500); }
 
 ::selection { background: var(--brand-glow); }

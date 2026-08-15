@@ -25,8 +25,8 @@
   <div class="app-main">
     <header class="app-topbar">
       <div class="d-flex align-items-center gap-3">
-        <button type="button" class="sidebar-collapse-btn d-md-none" id="mobile-sidebar-toggle"><i class="bi bi-list"></i></button>
-        <button type="button" class="sidebar-collapse-btn d-md-none" id="mobile-conv-toggle"><i class="bi bi-chat-left-text"></i></button>
+        <button type="button" class="sidebar-collapse-btn d-md-none" id="mobile-sidebar-toggle" aria-label="Toggle sidebar" title="Toggle sidebar"><i class="bi bi-list"></i></button>
+        <button type="button" class="sidebar-collapse-btn d-md-none" id="mobile-conv-toggle" aria-label="Toggle conversation list" title="Toggle conversation list"><i class="bi bi-chat-left-text"></i></button>
         <h5 class="mb-0">AI Chat</h5>
         <span class="badge-pill badge-muted" id="claude-status-badge"><span class="dot dot-muted"></span> Checking…</span>
       </div>
@@ -75,7 +75,7 @@
           <div class="agent-composer">
             <div class="surface agent-composer-shell">
               <textarea id="composer-input" rows="1" placeholder="Message the AI Agent…"></textarea>
-              <button type="button" class="btn-brand" id="composer-send-btn"><i class="bi bi-arrow-up"></i></button>
+              <button type="button" class="btn-brand" id="composer-send-btn" aria-label="Send message" title="Send message"><i class="bi bi-arrow-up"></i></button>
             </div>
           </div>
         </div>

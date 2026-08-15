@@ -3,7 +3,7 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.database.session import get_db
 from app.models.history import HistoryEntry, HistoryEntryStatus, HistoryEntryType
@@ -46,7 +46,10 @@ def list_history(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    query = db.query(HistoryEntry).filter(HistoryEntry.user_id == user.id)
+    # joinedload avoids an N+1 (one SELECT per row) that _to_out's
+    # entry.project.name lazy-load would otherwise trigger — one extra
+    # query per page of up to page_size rows on every list call.
+    query = db.query(HistoryEntry).options(joinedload(HistoryEntry.project)).filter(HistoryEntry.user_id == user.id)
 
     if type is not None:
         query = query.filter(HistoryEntry.type == type)

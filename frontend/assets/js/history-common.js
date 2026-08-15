@@ -66,7 +66,7 @@ function renderHistoryRows(items, { showProject = true } = {}) {
       }
       <span style="color:var(--text-muted); font-size:0.8rem;">${historyFormatDate(item.created_at)}</span>
       <span>
-        <button type="button" class="btn-ghost history-delete-btn" data-entry-id="${item.id}" style="padding:0.3rem 0.6rem; font-size:0.76rem;">
+        <button type="button" class="btn-ghost history-delete-btn" data-entry-id="${item.id}" aria-label="Delete" title="Delete" style="padding:0.3rem 0.6rem; font-size:0.76rem;">
           <i class="bi bi-trash3"></i>
         </button>
       </span>

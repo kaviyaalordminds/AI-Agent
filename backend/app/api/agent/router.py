@@ -4,7 +4,7 @@ import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.agents.orchestrator import record_unavailable_turn, run_chat_turn
 from app.database.session import SessionLocal, get_db
@@ -58,7 +58,9 @@ def list_conversations(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    query = db.query(Conversation).filter(Conversation.user_id == user.id)
+    # joinedload avoids an N+1 (one SELECT per row) that _to_out's
+    # conversation.project.name lazy-load would otherwise trigger.
+    query = db.query(Conversation).options(joinedload(Conversation.project)).filter(Conversation.user_id == user.id)
     if project_id is not None:
         query = query.filter(Conversation.project_id == project_id)
     if mode is not None:

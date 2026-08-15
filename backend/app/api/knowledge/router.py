@@ -1,7 +1,7 @@
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.database.session import get_db
 from app.integrations.claude.errors import ProviderNotConfiguredError
@@ -79,7 +79,11 @@ def list_gap_analyses(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    query = db.query(KnowledgeAnalysis).filter(KnowledgeAnalysis.user_id == user.id)
+    # joinedload avoids an N+1 (one SELECT per row) that _to_analysis_out's
+    # analysis.project.name lazy-load would otherwise trigger.
+    query = db.query(KnowledgeAnalysis).options(joinedload(KnowledgeAnalysis.project)).filter(
+        KnowledgeAnalysis.user_id == user.id
+    )
     if project_id is not None:
         query = query.filter(KnowledgeAnalysis.project_id == project_id)
     analyses = query.order_by(KnowledgeAnalysis.created_at.desc()).all()

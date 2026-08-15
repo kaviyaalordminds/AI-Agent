@@ -24,7 +24,7 @@
   <div class="app-main">
     <header class="app-topbar">
       <div class="d-flex align-items-center gap-3">
-        <button type="button" class="sidebar-collapse-btn d-md-none" id="mobile-sidebar-toggle"><i class="bi bi-list"></i></button>
+        <button type="button" class="sidebar-collapse-btn d-md-none" id="mobile-sidebar-toggle" aria-label="Toggle sidebar" title="Toggle sidebar"><i class="bi bi-list"></i></button>
         <h5 class="mb-0">History</h5>
       </div>
       <div class="d-flex align-items-center gap-3">
@@ -46,8 +46,8 @@
     <main class="app-content">
       <div class="surface p-3 mb-4">
         <div class="filter-bar">
-          <input class="form-control-premium" type="search" id="history-search" placeholder="Search history…" style="max-width:240px;" />
-          <select class="form-control-premium" id="history-type-filter" style="max-width:180px;">
+          <input class="form-control-premium" type="search" id="history-search" placeholder="Search history…" aria-label="Search history" style="max-width:240px;" />
+          <select class="form-control-premium" id="history-type-filter" aria-label="Filter by type" style="max-width:180px;">
             <option value="">All types</option>
             <option value="chat">Chat</option>
             <option value="image">Image</option>
@@ -60,14 +60,14 @@
             <option value="deployment">Deployment</option>
             <option value="knowledge_update">Knowledge Update</option>
           </select>
-          <select class="form-control-premium" id="history-status-filter" style="max-width:160px;">
+          <select class="form-control-premium" id="history-status-filter" aria-label="Filter by status" style="max-width:160px;">
             <option value="">All statuses</option>
             <option value="queued">Queued</option>
             <option value="processing">Processing</option>
             <option value="completed">Completed</option>
             <option value="failed">Failed</option>
           </select>
-          <select class="form-control-premium" id="history-project-filter" style="max-width:200px;">
+          <select class="form-control-premium" id="history-project-filter" aria-label="Filter by project" style="max-width:200px;">
             <option value="">All projects</option>
           </select>
           <button type="button" class="btn-ghost" id="history-clear-filters">Clear</button>

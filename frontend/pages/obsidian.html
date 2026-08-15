@@ -25,8 +25,8 @@
   <div class="app-main">
     <header class="app-topbar">
       <div class="d-flex align-items-center gap-3">
-        <button type="button" class="sidebar-collapse-btn d-md-none" id="mobile-sidebar-toggle"><i class="bi bi-list"></i></button>
-        <button type="button" class="sidebar-collapse-btn d-md-none" id="mobile-list-toggle"><i class="bi bi-journal-text"></i></button>
+        <button type="button" class="sidebar-collapse-btn d-md-none" id="mobile-sidebar-toggle" aria-label="Toggle sidebar" title="Toggle sidebar"><i class="bi bi-list"></i></button>
+        <button type="button" class="sidebar-collapse-btn d-md-none" id="mobile-list-toggle" aria-label="Toggle note list" title="Toggle note list"><i class="bi bi-journal-text"></i></button>
         <h5 class="mb-0">Obsidian</h5>
         <span class="badge-pill badge-muted" id="vault-status-badge"><span class="dot dot-muted"></span> Checking…</span>
       </div>
@@ -50,8 +50,8 @@
       <aside class="vault-list-pane" id="vault-list-pane">
         <div class="vault-list-header">
           <button type="button" class="btn-brand w-100" id="new-note-btn"><i class="bi bi-file-earmark-plus"></i> New note</button>
-          <input class="form-control-premium" type="search" id="vault-search" placeholder="Search vault…" />
-          <select class="form-control-premium" id="vault-folder-filter">
+          <input class="form-control-premium" type="search" id="vault-search" placeholder="Search vault…" aria-label="Search vault" />
+          <select class="form-control-premium" id="vault-folder-filter" aria-label="Filter by folder">
             <option value="">All folders</option>
           </select>
         </div>

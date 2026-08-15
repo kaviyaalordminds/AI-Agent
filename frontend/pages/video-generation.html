@@ -27,7 +27,7 @@
   <div class="app-main">
     <header class="app-topbar">
       <div class="d-flex align-items-center gap-3">
-        <button type="button" class="sidebar-collapse-btn d-md-none" id="mobile-sidebar-toggle"><i class="bi bi-list"></i></button>
+        <button type="button" class="sidebar-collapse-btn d-md-none" id="mobile-sidebar-toggle" aria-label="Toggle sidebar" title="Toggle sidebar"><i class="bi bi-list"></i></button>
         <h5 class="mb-0">Video Generation</h5>
       </div>
       <div class="d-flex align-items-center gap-3">
@@ -61,7 +61,7 @@
             <label class="field-label mt-3" for="vid-duration">Duration: <span id="vid-duration-value">4</span>s</label>
             <input type="range" class="form-range" id="vid-duration" min="1" max="12" step="1" value="4">
 
-            <label class="field-label mt-3">Reference image <span style="font-weight:400; color:var(--text-muted);">(optional, for image-to-video)</span></label>
+            <label class="field-label mt-3" for="vid-reference-image">Reference image <span style="font-weight:400; color:var(--text-muted);">(optional, for image-to-video)</span></label>
             <input type="file" class="form-control-premium" id="vid-reference-image" accept="image/*">
             <div id="vid-reference-preview" class="d-none mt-2">
               <img id="vid-reference-preview-img" style="max-height:90px; border-radius:8px;" alt="Reference preview">

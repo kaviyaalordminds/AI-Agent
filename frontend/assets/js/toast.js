@@ -3,6 +3,12 @@ function ensureToastStack() {
   if (!stack) {
     stack = document.createElement("div");
     stack.id = "toast-stack";
+    // Every toast (generation results, save/delete confirmations, errors)
+    // was previously invisible to screen readers — role="status" +
+    // aria-live="polite" makes new toasts announced automatically without
+    // interrupting whatever the user is currently doing.
+    stack.setAttribute("role", "status");
+    stack.setAttribute("aria-live", "polite");
     document.body.appendChild(stack);
   }
   return stack;
