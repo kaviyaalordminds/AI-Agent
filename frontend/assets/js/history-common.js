@@ -10,6 +10,7 @@ const HISTORY_TYPE_ICONS = {
   website: "bi-globe",
   poster: "bi-file-earmark-image",
   logo: "bi-vector-pen",
+  graphic_design: "bi-palette",
   deployment: "bi-cloud-arrow-up",
   knowledge_update: "bi-arrow-repeat",
 };

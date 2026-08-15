@@ -6,6 +6,13 @@ ownership lookup, and download logic is shared with `/api/jobs/*` via
 module only adds prompt/provider-specific request shaping (image
 width/height, optional video reference image) and type-scoped routes.
 
+Poster/logo/graphic-design generation (`/poster`, `/logo`, `/design`)
+reuse this exact image pipeline (same provider, same job queue, same
+`_run_image_job` worker) — they only add domain-specific structured
+request fields (headline/brand name/design type, etc.) that get turned
+into a purpose-built prompt here rather than making the caller write
+the whole image prompt by hand.
+
 Frontend never talks to a vendor API directly: it calls these backend
 routes, which resolve a provider through
 get_image_provider()/get_video_provider() (env-configured, never
@@ -46,7 +53,10 @@ from app.models.user import User
 from app.models.voice_profile import VoiceProfile
 from app.schemas.document import DocumentOut
 from app.schemas.generation import (
+    CreateGraphicDesignJobRequest,
     CreateImageJobRequest,
+    CreateLogoJobRequest,
+    CreatePosterJobRequest,
     CreateTranscriptionJobRequest,
     CreateVideoJobRequest,
     ExcelDocumentRequest,
@@ -115,6 +125,166 @@ def download_image_generation(
     job_id: uuid.UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     job = _ensure_type(get_owned_job(db, user, job_id), JobType.image)
+    return build_download_response(job)
+
+
+@router.post("/poster", response_model=JobOut, status_code=status.HTTP_202_ACCEPTED)
+async def create_poster_generation(
+    payload: CreatePosterJobRequest,
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    _csrf: None = Depends(require_csrf),
+):
+    settings = get_settings()
+    enforce_rate_limit(request, "generation", settings.generation_rate_limit_max_requests)
+    enforce_concurrency_limit(db, user)
+    project = resolve_owned_project(db, user, payload.project_id)
+
+    built_prompt = f"Create a poster design. Prominently display the text '{payload.headline}'"
+    if payload.subheading:
+        built_prompt += f" with the subheading '{payload.subheading}'"
+    built_prompt += (
+        f". Visual style and subject: {payload.prompt}. "
+        "Professional poster layout, high visual impact, legible typography."
+    )
+
+    provider_name = get_image_provider().capability().provider
+    job = create_and_submit_job(
+        db,
+        user,
+        project,
+        JobType.poster,
+        provider_name,
+        {
+            "prompt": built_prompt,
+            "width": payload.width,
+            "height": payload.height,
+            "headline": payload.headline,
+            "subheading": payload.subheading,
+        },
+    )
+    logger.info("poster generation job created: job_id=%s status=%s", job.id, job.status.value)
+    return job
+
+
+@router.get("/poster/{job_id}", response_model=JobOut)
+def get_poster_generation(job_id: uuid.UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return _ensure_type(get_owned_job(db, user, job_id), JobType.poster)
+
+
+@router.get("/poster/{job_id}/download")
+def download_poster_generation(
+    job_id: uuid.UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+):
+    job = _ensure_type(get_owned_job(db, user, job_id), JobType.poster)
+    return build_download_response(job)
+
+
+@router.post("/logo", response_model=JobOut, status_code=status.HTTP_202_ACCEPTED)
+async def create_logo_generation(
+    payload: CreateLogoJobRequest,
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    _csrf: None = Depends(require_csrf),
+):
+    settings = get_settings()
+    enforce_rate_limit(request, "generation", settings.generation_rate_limit_max_requests)
+    enforce_concurrency_limit(db, user)
+    project = resolve_owned_project(db, user, payload.project_id)
+
+    built_prompt = f"Design a {payload.style} logo for a brand called '{payload.brand_name}'."
+    if payload.description:
+        built_prompt += f" Additional concept details: {payload.description}."
+    if payload.colors:
+        built_prompt += f" Color palette: {payload.colors}."
+    built_prompt += (
+        " Clean, professional, suitable for a company brand identity, "
+        "centered on a plain background, vector-style."
+    )
+
+    provider_name = get_image_provider().capability().provider
+    job = create_and_submit_job(
+        db,
+        user,
+        project,
+        JobType.logo,
+        provider_name,
+        {
+            "prompt": built_prompt,
+            "width": 1024,
+            "height": 1024,
+            "brand_name": payload.brand_name,
+            "style": payload.style,
+        },
+    )
+    logger.info("logo generation job created: job_id=%s status=%s", job.id, job.status.value)
+    return job
+
+
+@router.get("/logo/{job_id}", response_model=JobOut)
+def get_logo_generation(job_id: uuid.UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return _ensure_type(get_owned_job(db, user, job_id), JobType.logo)
+
+
+@router.get("/logo/{job_id}/download")
+def download_logo_generation(
+    job_id: uuid.UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+):
+    job = _ensure_type(get_owned_job(db, user, job_id), JobType.logo)
+    return build_download_response(job)
+
+
+@router.post("/design", response_model=JobOut, status_code=status.HTTP_202_ACCEPTED)
+async def create_graphic_design_generation(
+    payload: CreateGraphicDesignJobRequest,
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    _csrf: None = Depends(require_csrf),
+):
+    settings = get_settings()
+    enforce_rate_limit(request, "generation", settings.generation_rate_limit_max_requests)
+    enforce_concurrency_limit(db, user)
+    project = resolve_owned_project(db, user, payload.project_id)
+
+    design_type_label = payload.design_type.replace("_", " ")
+    built_prompt = (
+        f"Create a {design_type_label} graphic design. {payload.prompt} "
+        "Professional, visually appealing, well-composed layout."
+    )
+
+    provider_name = get_image_provider().capability().provider
+    job = create_and_submit_job(
+        db,
+        user,
+        project,
+        JobType.graphic_design,
+        provider_name,
+        {
+            "prompt": built_prompt,
+            "width": payload.width,
+            "height": payload.height,
+            "design_type": payload.design_type,
+        },
+    )
+    logger.info("graphic design generation job created: job_id=%s status=%s", job.id, job.status.value)
+    return job
+
+
+@router.get("/design/{job_id}", response_model=JobOut)
+def get_graphic_design_generation(
+    job_id: uuid.UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+):
+    return _ensure_type(get_owned_job(db, user, job_id), JobType.graphic_design)
+
+
+@router.get("/design/{job_id}/download")
+def download_graphic_design_generation(
+    job_id: uuid.UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+):
+    job = _ensure_type(get_owned_job(db, user, job_id), JobType.graphic_design)
     return build_download_response(job)
 
 

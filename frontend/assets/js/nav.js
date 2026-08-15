@@ -26,9 +26,9 @@ const NAV_STRUCTURE = [
       { key: "presentations", label: "Presentations", icon: "bi-easel", href: "ppt-generation.html", enabled: true },
       { key: "website", label: "Website", icon: "bi-globe", href: "#", enabled: false },
       { key: "website3d", label: "3D Website", icon: "bi-badge-3d", href: "#", enabled: false },
-      { key: "poster", label: "Poster", icon: "bi-file-earmark-image", href: "#", enabled: false },
-      { key: "logo", label: "Logo", icon: "bi-vector-pen", href: "#", enabled: false },
-      { key: "design", label: "Graphic Design", icon: "bi-palette", href: "#", enabled: false },
+      { key: "poster", label: "Poster", icon: "bi-file-earmark-image", href: "poster-generation.html", enabled: true },
+      { key: "logo", label: "Logo", icon: "bi-vector-pen", href: "logo-generation.html", enabled: true },
+      { key: "design", label: "Graphic Design", icon: "bi-palette", href: "graphic-design-generation.html", enabled: true },
     ],
   },
   {

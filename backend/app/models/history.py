@@ -18,6 +18,7 @@ class HistoryEntryType(str, enum.Enum):
     website = "website"
     poster = "poster"
     logo = "logo"
+    graphic_design = "graphic_design"
     deployment = "deployment"
     knowledge_update = "knowledge_update"
 
@@ -31,9 +32,10 @@ class HistoryEntryStatus(str, enum.Enum):
 
 class HistoryEntry(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     """A record of one AI-agent/generation action. Written by the module
-    that performs the action (chat, image/video/audio generation, document
-    generation, knowledge-vault updates; deployment/website/poster/logo
-    remain unwritten until those modules exist). Also read back as
+    that performs the action (chat, image/video/audio/poster/logo/
+    graphic-design generation, document generation, knowledge-vault
+    updates; deployment/website remain unwritten until those modules
+    exist). Also read back as
     project-scoped "AI context" by the orchestrator (see
     app/agents/orchestrator.py) so a Project-mode conversation is aware of
     what has actually happened in that project. No entries are ever seeded

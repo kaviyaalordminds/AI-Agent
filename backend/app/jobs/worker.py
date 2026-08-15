@@ -34,6 +34,9 @@ _HISTORY_TYPE_FOR_JOB_TYPE = {
     JobType.transcription: HistoryEntryType.audio,
     JobType.image: HistoryEntryType.image,
     JobType.video: HistoryEntryType.video,
+    JobType.poster: HistoryEntryType.poster,
+    JobType.logo: HistoryEntryType.logo,
+    JobType.graphic_design: HistoryEntryType.graphic_design,
 }
 
 
@@ -119,6 +122,13 @@ _RUNNERS = {
     JobType.transcription: _run_transcription_job,
     JobType.image: _run_image_job,
     JobType.video: _run_video_job,
+    # Poster/logo/graphic design are all still just "call the image
+    # provider with a prompt" — the domain-specific structuring already
+    # happened server-side in app/api/generation/router.py before the job
+    # was ever queued, so no dedicated runner is needed here.
+    JobType.poster: _run_image_job,
+    JobType.logo: _run_image_job,
+    JobType.graphic_design: _run_image_job,
 }
 
 
@@ -191,7 +201,7 @@ def _log_history(db, job: GenerationJob, status: HistoryEntryStatus) -> None:
             project_id=job.project_id,
             type=history_type,
             status=status,
-            title=f"{job.type.value.capitalize()} generation job",
+            title=f"{job.type.value.replace('_', ' ').capitalize()} generation job",
             completed_at=utcnow() if status == HistoryEntryStatus.completed else None,
         )
     )

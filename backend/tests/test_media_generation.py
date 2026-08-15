@@ -239,6 +239,195 @@ class TestImageGenerationEndpoint:
         assert client.get(f"/api/generation/image/{job_id}/download").status_code == 404
 
 
+class TestPosterLogoGraphicDesignEndpoints:
+    """Poster/logo/graphic-design generation (/api/generation/{poster,logo,
+    design}) reuse the exact same image-generation pipeline as /image
+    (same provider, same job queue, same worker runner) — see
+    app/api/generation/router.py. These tests focus on what's actually
+    different: the domain-specific request fields, the server-built
+    prompt, and that each route is correctly scoped to its own JobType
+    (not interchangeable with /image or each other) — full job-lifecycle
+    coverage (quota errors, concurrency limits, etc.) is already proven
+    generically by TestImageGenerationEndpoint above since all four
+    routes share the same underlying create_and_submit_job/_run_image_job
+    code path."""
+
+    def test_requires_authentication(self, client):
+        assert client.post("/api/generation/poster", json={"headline": "Sale", "prompt": "a poster"}).status_code == 401
+        assert client.post("/api/generation/logo", json={"brand_name": "Acme"}).status_code == 401
+        assert client.post("/api/generation/design", json={"prompt": "a flyer"}).status_code == 401
+
+    def test_requires_csrf(self, auth_client):
+        client, _csrf = auth_client
+        assert client.post("/api/generation/poster", json={"headline": "Sale", "prompt": "x"}).status_code == 403
+        assert client.post("/api/generation/logo", json={"brand_name": "Acme"}).status_code == 403
+        assert client.post("/api/generation/design", json={"prompt": "x"}).status_code == 403
+
+    def test_poster_requires_headline_and_prompt(self, auth_client):
+        client, csrf = auth_client
+        resp = client.post("/api/generation/poster", json={"headline": "", "prompt": "x"}, headers={"X-CSRF-Token": csrf})
+        assert resp.status_code == 422
+        resp = client.post("/api/generation/poster", json={"headline": "Sale"}, headers={"X-CSRF-Token": csrf})
+        assert resp.status_code == 422
+
+    def test_logo_requires_brand_name_and_rejects_bad_style(self, auth_client):
+        client, csrf = auth_client
+        resp = client.post("/api/generation/logo", json={"brand_name": ""}, headers={"X-CSRF-Token": csrf})
+        assert resp.status_code == 422
+        resp = client.post(
+            "/api/generation/logo", json={"brand_name": "Acme", "style": "not-a-real-style"}, headers={"X-CSRF-Token": csrf}
+        )
+        assert resp.status_code == 422
+
+    def test_design_requires_prompt_and_rejects_bad_design_type(self, auth_client):
+        client, csrf = auth_client
+        resp = client.post("/api/generation/design", json={"prompt": ""}, headers={"X-CSRF-Token": csrf})
+        assert resp.status_code == 422
+        resp = client.post(
+            "/api/generation/design", json={"prompt": "x", "design_type": "not-a-real-type"}, headers={"X-CSRF-Token": csrf}
+        )
+        assert resp.status_code == 422
+
+    def test_poster_builds_prompt_from_headline_and_subheading_and_succeeds(self, auth_client, monkeypatch):
+        client, csrf = auth_client
+        import app.jobs.worker as worker_module
+
+        fake = _FakeImageProvider()
+        captured_prompts = []
+        original_generate = fake.generate
+
+        async def _capturing_generate(prompt, **kwargs):
+            captured_prompts.append(prompt)
+            return await original_generate(prompt, **kwargs)
+
+        fake.generate = _capturing_generate
+        monkeypatch.setattr(worker_module, "get_image_provider", lambda: fake)
+
+        resp = client.post(
+            "/api/generation/poster",
+            json={"headline": "Summer Sale", "subheading": "Up to 50% off", "prompt": "bright beach scene"},
+            headers={"X-CSRF-Token": csrf},
+        )
+        assert resp.status_code == 202
+        job = _poll_until_terminal(client, f"/api/generation/poster/{resp.json()['id']}")
+        assert job["status"] == "completed"
+        assert "Summer Sale" in captured_prompts[0]
+        assert "Up to 50% off" in captured_prompts[0]
+        assert "bright beach scene" in captured_prompts[0]
+
+        download = client.get(f"/api/generation/poster/{job['id']}/download")
+        assert download.status_code == 200
+        assert download.headers["content-type"] == "image/png"
+
+    def test_logo_builds_prompt_from_brand_style_colors_and_succeeds(self, auth_client, monkeypatch):
+        client, csrf = auth_client
+        import app.jobs.worker as worker_module
+
+        fake = _FakeImageProvider()
+        captured_prompts = []
+        original_generate = fake.generate
+
+        async def _capturing_generate(prompt, **kwargs):
+            captured_prompts.append(prompt)
+            return await original_generate(prompt, **kwargs)
+
+        fake.generate = _capturing_generate
+        monkeypatch.setattr(worker_module, "get_image_provider", lambda: fake)
+
+        resp = client.post(
+            "/api/generation/logo",
+            json={"brand_name": "Acme Rockets", "style": "geometric", "colors": "blue and gold"},
+            headers={"X-CSRF-Token": csrf},
+        )
+        assert resp.status_code == 202
+        job = _poll_until_terminal(client, f"/api/generation/logo/{resp.json()['id']}")
+        assert job["status"] == "completed"
+        assert "Acme Rockets" in captured_prompts[0]
+        assert "geometric" in captured_prompts[0]
+        assert "blue and gold" in captured_prompts[0]
+
+    def test_design_builds_prompt_from_design_type_and_succeeds(self, auth_client, monkeypatch):
+        client, csrf = auth_client
+        import app.jobs.worker as worker_module
+
+        monkeypatch.setattr(worker_module, "get_image_provider", lambda: _FakeImageProvider())
+
+        resp = client.post(
+            "/api/generation/design",
+            json={"design_type": "business_card", "prompt": "clean corporate style"},
+            headers={"X-CSRF-Token": csrf},
+        )
+        assert resp.status_code == 202
+        job = _poll_until_terminal(client, f"/api/generation/design/{resp.json()['id']}")
+        assert job["status"] == "completed"
+
+    def test_routes_are_scoped_to_their_own_job_type(self, auth_client, monkeypatch):
+        """A poster job id must not be reachable via /logo, /design, or
+        /image and vice versa — each route's _ensure_type check must use
+        its own JobType, not fall through to a shared/generic one."""
+        client, csrf = auth_client
+        import app.jobs.worker as worker_module
+
+        monkeypatch.setattr(worker_module, "get_image_provider", lambda: _FakeImageProvider())
+
+        poster_id = client.post(
+            "/api/generation/poster", json={"headline": "H", "prompt": "p"}, headers={"X-CSRF-Token": csrf}
+        ).json()["id"]
+        logo_id = client.post(
+            "/api/generation/logo", json={"brand_name": "B"}, headers={"X-CSRF-Token": csrf}
+        ).json()["id"]
+
+        assert client.get(f"/api/generation/logo/{poster_id}").status_code == 404
+        assert client.get(f"/api/generation/design/{poster_id}").status_code == 404
+        assert client.get(f"/api/generation/image/{poster_id}").status_code == 404
+        assert client.get(f"/api/generation/poster/{logo_id}").status_code == 404
+
+    def test_generation_is_logged_to_history_with_correct_types(self, auth_client, monkeypatch):
+        client, csrf = auth_client
+        import app.jobs.worker as worker_module
+
+        monkeypatch.setattr(worker_module, "get_image_provider", lambda: _FakeImageProvider())
+
+        poster_resp = client.post(
+            "/api/generation/poster", json={"headline": "H", "prompt": "p"}, headers={"X-CSRF-Token": csrf}
+        )
+        _poll_until_terminal(client, f"/api/generation/poster/{poster_resp.json()['id']}")
+
+        logo_resp = client.post("/api/generation/logo", json={"brand_name": "B"}, headers={"X-CSRF-Token": csrf})
+        _poll_until_terminal(client, f"/api/generation/logo/{logo_resp.json()['id']}")
+
+        design_resp = client.post("/api/generation/design", json={"prompt": "p"}, headers={"X-CSRF-Token": csrf})
+        _poll_until_terminal(client, f"/api/generation/design/{design_resp.json()['id']}")
+
+        poster_history = client.get("/api/history?type=poster").json()["items"]
+        assert len(poster_history) == 1 and poster_history[0]["status"] == "completed"
+
+        logo_history = client.get("/api/history?type=logo").json()["items"]
+        assert len(logo_history) == 1 and logo_history[0]["status"] == "completed"
+
+        design_history = client.get("/api/history?type=graphic_design").json()["items"]
+        assert len(design_history) == 1 and design_history[0]["status"] == "completed"
+
+    def test_logo_ignores_client_supplied_dimensions_and_stays_square(self, auth_client, monkeypatch):
+        """CreateLogoJobRequest has no width/height fields at all — logos
+        are always generated square, matching the app's own logo-usage
+        convention (avatars/brand marks), not left to arbitrary caller
+        input like /image's aspect picker."""
+        client, csrf = auth_client
+        import app.jobs.worker as worker_module
+
+        monkeypatch.setattr(worker_module, "get_image_provider", lambda: _FakeImageProvider())
+        resp = client.post(
+            "/api/generation/logo",
+            json={"brand_name": "Acme", "width": 1792, "height": 1024},
+            headers={"X-CSRF-Token": csrf},
+        )
+        assert resp.status_code == 202
+        job = _poll_until_terminal(client, f"/api/generation/logo/{resp.json()['id']}")
+        assert job["input_metadata"]["width"] == 1024
+        assert job["input_metadata"]["height"] == 1024
+
+
 class TestVideoGenerationEndpoint:
     def test_requires_authentication(self, client):
         assert client.post("/api/generation/video", json={"prompt": "a car"}).status_code == 401

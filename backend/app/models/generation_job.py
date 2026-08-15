@@ -15,6 +15,9 @@ class JobType(str, enum.Enum):
     image = "image"
     video = "video"
     voice_clone = "voice_clone"
+    poster = "poster"
+    logo = "logo"
+    graphic_design = "graphic_design"
 
 
 class JobStatus(str, enum.Enum):

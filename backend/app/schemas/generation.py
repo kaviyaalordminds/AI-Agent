@@ -12,6 +12,40 @@ class CreateImageJobRequest(BaseModel):
     project_id: uuid.UUID | None = None
 
 
+# --- Poster / Logo / Graphic Design: same underlying image generation
+# pipeline as CreateImageJobRequest (job queue -> ImageProvider ->
+# storage), but each takes domain-specific structured fields that the
+# router turns into a purpose-built prompt server-side, rather than
+# making the caller write the whole prompt by hand like plain Image
+# generation does. See app/api/generation/router.py for the prompt
+# assembly and app/jobs/worker.py for execution (both reuse _run_image_job).
+
+
+class CreatePosterJobRequest(BaseModel):
+    headline: str = Field(min_length=1, max_length=200, description="Main text to display prominently on the poster.")
+    subheading: str | None = Field(default=None, max_length=200)
+    prompt: str = Field(min_length=1, max_length=2000, description="Visual style/subject description.")
+    width: int = Field(default=1024, ge=256, le=2048)
+    height: int = Field(default=1024, ge=256, le=2048)
+    project_id: uuid.UUID | None = None
+
+
+class CreateLogoJobRequest(BaseModel):
+    brand_name: str = Field(min_length=1, max_length=200)
+    style: Literal["minimalist", "modern", "vintage", "geometric", "playful", "luxury"] = "minimalist"
+    description: str | None = Field(default=None, max_length=1000, description="Additional concept/detail.")
+    colors: str | None = Field(default=None, max_length=200, description="Preferred color palette, e.g. 'blue and gold'.")
+    project_id: uuid.UUID | None = None
+
+
+class CreateGraphicDesignJobRequest(BaseModel):
+    design_type: Literal["social_media_post", "banner", "flyer", "business_card", "presentation_cover", "other"] = "other"
+    prompt: str = Field(min_length=1, max_length=2000)
+    width: int = Field(default=1024, ge=256, le=2048)
+    height: int = Field(default=1024, ge=256, le=2048)
+    project_id: uuid.UUID | None = None
+
+
 class CreateVideoJobRequest(BaseModel):
     prompt: str = Field(min_length=1, max_length=2000)
     duration_seconds: float = Field(default=4.0, ge=1.0, le=60.0)

@@ -7,8 +7,9 @@ const QUICK_CREATE = [
   { icon: "bi-file-earmark-spreadsheet", label: "Excel", href: "excel-generation.html" },
   { icon: "bi-globe", label: "Website" },
   { icon: "bi-badge-3d", label: "3D Web" },
-  { icon: "bi-file-earmark-image", label: "Poster" },
-  { icon: "bi-vector-pen", label: "Logo" },
+  { icon: "bi-file-earmark-image", label: "Poster", href: "poster-generation.html" },
+  { icon: "bi-vector-pen", label: "Logo", href: "logo-generation.html" },
+  { icon: "bi-palette", label: "Design", href: "graphic-design-generation.html" },
 ];
 
 function initQuickCreate() {
