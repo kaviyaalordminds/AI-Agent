@@ -31,10 +31,13 @@ class HistoryEntryStatus(str, enum.Enum):
 
 class HistoryEntry(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     """A record of one AI-agent/generation action. Written by the module
-    that performs the action (chat, image generation, deployment, etc.) —
-    none of those modules exist yet, so this table is legitimately empty
-    until later phases start writing to it. No entries are ever seeded or
-    fabricated for display purposes."""
+    that performs the action (chat, image/video/audio generation, document
+    generation, knowledge-vault updates; deployment/website/poster/logo
+    remain unwritten until those modules exist). Also read back as
+    project-scoped "AI context" by the orchestrator (see
+    app/agents/orchestrator.py) so a Project-mode conversation is aware of
+    what has actually happened in that project. No entries are ever seeded
+    or fabricated for display purposes."""
 
     __tablename__ = "history_entries"
 

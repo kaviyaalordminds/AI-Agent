@@ -281,23 +281,38 @@ function initComposer() {
   document.getElementById("composer-send-btn").addEventListener("click", sendMessage);
 }
 
-function initNewChatModal() {
-  let selectedMode = defaultMode;
+let newChatSelectedMode = "chat";
+
+function renderNewChatModePicker(selected) {
+  newChatSelectedMode = selected;
   renderModePicker(document.getElementById("new-chat-mode-picker"), {
-    selected: selectedMode,
-    onSelect: (m) => (selectedMode = m),
+    selected: newChatSelectedMode,
+    onSelect: (m) => (newChatSelectedMode = m),
   });
+}
+
+// Opens the "new conversation" modal pre-scoped to a mode/project — used
+// both by the normal "New chat" button and by a project workspace's Chat
+// tab "New" link (see the ?project_id= handling in init() below).
+async function openNewChatModal({ mode = defaultMode, projectId = "" } = {}) {
+  await loadProjectOptions();
+  renderNewChatModePicker(mode);
+  document.getElementById("new-chat-project").value = projectId;
+  newChatModal.show();
+}
+
+function initNewChatModal() {
+  renderNewChatModePicker(defaultMode);
 
   document.getElementById("new-chat-btn").addEventListener("click", () => {
-    loadProjectOptions();
-    newChatModal.show();
+    openNewChatModal({ mode: defaultMode });
   });
 
   document.getElementById("new-chat-create-btn").addEventListener("click", async () => {
     const projectId = document.getElementById("new-chat-project").value;
     newChatModal.hide();
     try {
-      await createConversation({ mode: selectedMode, projectId });
+      await createConversation({ mode: newChatSelectedMode, projectId });
     } catch (err) {
       window.AIAgentToast.show(err.message, "error");
     }
@@ -342,6 +357,9 @@ async function init() {
 
   const params = new URLSearchParams(window.location.search);
   const prefill = params.get("prompt");
+  const openConversationId = params.get("conversation");
+  const linkedProjectId = params.get("project_id");
+
   if (prefill) {
     try {
       await createConversation({ mode: defaultMode, projectId: null });
@@ -351,6 +369,15 @@ async function init() {
     } catch (err) {
       window.AIAgentToast.show(err.message, "error");
     }
+  } else if (openConversationId) {
+    // Deep link from a project workspace's Chat tab into an existing
+    // project-scoped conversation.
+    await selectConversation(openConversationId);
+  } else if (linkedProjectId) {
+    // Deep link from a project workspace's Chat tab "New" button —
+    // pre-scope the new-chat modal to that project and Project mode
+    // instead of making the user pick it again.
+    await openNewChatModal({ mode: "project", projectId: linkedProjectId });
   }
 }
 

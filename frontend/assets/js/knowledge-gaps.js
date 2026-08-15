@@ -195,6 +195,14 @@ async function init() {
   });
 
   await Promise.all([loadStatus(), loadProjects(), loadHistory()]);
+
+  // Deep link from a project workspace's Knowledge tab "Run analysis"
+  // link — pre-scope the next analysis to that project.
+  const linkedProjectId = new URLSearchParams(window.location.search).get("project_id");
+  if (linkedProjectId) {
+    document.getElementById("gap-project").value = linkedProjectId;
+    document.getElementById("gap-query").focus();
+  }
 }
 
 init();

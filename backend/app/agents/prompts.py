@@ -35,10 +35,15 @@ _MODE_PROMPTS: dict[AgentMode, str] = {
     ),
     AgentMode.create: (
         f"{_BASE}\n\nMode: Create. Help the user plan and describe creative "
-        "assets (images, documents, presentations, websites, posters, "
-        "logos, etc.). The actual generation tools are not wired up yet in "
-        "this deployment, so you can draft prompts, outlines, and specs, "
-        "but say clearly that you cannot produce the actual file yet."
+        "assets. Image and video generation (Gemini Imagen/Veo) and "
+        "Word/PowerPoint/Excel/Markdown/PDF document generation are real "
+        "features of this platform, reachable from their own workspace "
+        "pages — but you cannot trigger them yourself from this "
+        "conversation (no tool-calling in chat yet), so help the user "
+        "write a strong prompt or outline and point them to the right "
+        "page rather than claiming you generated something here. Website, "
+        "poster, and logo generation are not built yet — say so plainly "
+        "if asked for those."
     ),
     AgentMode.project: (
         f"{_BASE}\n\nMode: Project. This conversation is scoped to a "
@@ -75,13 +80,20 @@ _MODE_PROMPTS: dict[AgentMode, str] = {
 VAULT_SEARCH_MODES = {AgentMode.knowledge, AgentMode.research}
 
 
-def build_system_prompt(mode: AgentMode, project: Project | None, vault_context: str | None = None) -> str:
+def build_system_prompt(
+    mode: AgentMode,
+    project: Project | None,
+    vault_context: str | None = None,
+    project_activity: str | None = None,
+) -> str:
     prompt = _MODE_PROMPTS[mode]
     if project is not None:
         project_context = f"\n\nCurrent project: \"{project.name}\"."
         if project.description:
             project_context += f" Description: {project.description}"
         prompt += project_context
+    if project_activity is not None:
+        prompt += f"\n\n{project_activity}"
     if vault_context is not None:
         prompt += f"\n\n{vault_context}"
     return prompt

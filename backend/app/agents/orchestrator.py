@@ -29,11 +29,13 @@ from app.integrations.claude.errors import ProviderRequestError
 from app.integrations.obsidian.factory import get_obsidian_provider
 from app.models.conversation import Conversation, Message, MessageRole
 from app.models.history import HistoryEntry, HistoryEntryStatus, HistoryEntryType
+from app.models.project import Project
 
 logger = logging.getLogger("agents.orchestrator")
 
 _MAX_VAULT_RESULTS = 4
 _MAX_NOTE_EXCERPT_CHARS = 500
+_MAX_PROJECT_ACTIVITY_ITEMS = 8
 
 _TITLE_MAX_LEN = 60
 
@@ -98,7 +100,9 @@ async def run_chat_turn(
     if conversation.mode in VAULT_SEARCH_MODES:
         vault_context = _search_vault_context(conversation.user_id, user_content)
 
-    system_prompt = build_system_prompt(conversation.mode, conversation.project, vault_context)
+    project_activity = _build_project_activity_context(db, conversation.project)
+
+    system_prompt = build_system_prompt(conversation.mode, conversation.project, vault_context, project_activity)
     history = _load_message_history(db, conversation.id)
 
     full_text = ""
@@ -139,6 +143,36 @@ def _search_vault_context(user_id, query: str) -> str:
         excerpt = note.excerpt[:_MAX_NOTE_EXCERPT_CHARS]
         blocks.append(f'- "{note.title}" ({note.path}): {excerpt}')
     return "\n".join(blocks)
+
+
+def _build_project_activity_context(db: Session, project: Project | None) -> str | None:
+    """Gives Project-mode (and any other project-scoped) conversations real
+    awareness of what has actually happened in that project, instead of
+    only its static name/description (see prompts.py). Reads HistoryEntry
+    because every generation module (chat excluded — it's noise here) and
+    Document/GenerationJob writer already logs there with project_id, so
+    this is the one query that covers image/video/audio/document/
+    knowledge-update activity without duplicating each module's own
+    listing endpoint. Bounded to a handful of the most recent items so it
+    never grows the prompt unboundedly."""
+    if project is None:
+        return None
+
+    entries = (
+        db.query(HistoryEntry)
+        .filter(HistoryEntry.project_id == project.id, HistoryEntry.type != HistoryEntryType.chat)
+        .order_by(HistoryEntry.created_at.desc())
+        .limit(_MAX_PROJECT_ACTIVITY_ITEMS)
+        .all()
+    )
+    if not entries:
+        return None
+
+    lines = ["Recent activity in this project (most recent first) — for your awareness only, not verbatim content:"]
+    for entry in entries:
+        when = (entry.completed_at or entry.created_at).strftime("%Y-%m-%d")
+        lines.append(f'- [{entry.type.value}] "{entry.title}" — {entry.status.value} ({when})')
+    return "\n".join(lines)
 
 
 def _log_history(db: Session, conversation: Conversation, status: HistoryEntryStatus, user_content: str) -> None:

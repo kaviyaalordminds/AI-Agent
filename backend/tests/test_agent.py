@@ -254,6 +254,91 @@ class TestSendMessage:
         assert "Manufacturing HRMS" in fake.received_system_prompt
         assert "Factory HR system" in fake.received_system_prompt
 
+    def test_send_message_injects_project_activity_into_system_prompt(self, auth_client, monkeypatch):
+        client, csrf = auth_client
+        project = client.post(
+            "/api/projects",
+            json={"name": "Manufacturing HRMS"},
+            headers={"X-CSRF-Token": csrf},
+        ).json()
+
+        # A structured Word document requires no AI provider, so it's a
+        # deterministic way to give the project real HistoryEntry activity.
+        client.post(
+            "/api/generation/document/word",
+            json={
+                "title": "Onboarding Guide",
+                "project_id": project["id"],
+                "blocks": [{"type": "paragraph", "text": "Welcome."}],
+            },
+            headers={"X-CSRF-Token": csrf},
+        )
+
+        conv = client.post(
+            "/api/agent/conversations",
+            json={"mode": "project", "project_id": project["id"]},
+            headers={"X-CSRF-Token": csrf},
+        ).json()
+
+        fake = _FakeProvider(chunks=["OK"])
+        _patch_provider(monkeypatch, fake)
+
+        client.post(
+            f"/api/agent/conversations/{conv['id']}/messages",
+            json={"content": "What's happened in this project so far?"},
+            headers={"X-CSRF-Token": csrf},
+        )
+        assert "Recent activity in this project" in fake.received_system_prompt
+        assert "Onboarding Guide" in fake.received_system_prompt
+        assert "[document]" in fake.received_system_prompt
+
+    def test_project_activity_context_excludes_other_users_projects(self, auth_client, client, email_outbox, monkeypatch):
+        import re
+
+        client_a, csrf_a = auth_client
+        project = client_a.post(
+            "/api/projects", json={"name": "User A's project"}, headers={"X-CSRF-Token": csrf_a}
+        ).json()
+        client_a.post(
+            "/api/generation/document/word",
+            json={
+                "title": "Confidential Plan",
+                "project_id": project["id"],
+                "blocks": [{"type": "paragraph", "text": "Secret."}],
+            },
+            headers={"X-CSRF-Token": csrf_a},
+        )
+
+        second_password = "Str0ng!Passw0rd2"
+        client.post(
+            "/api/auth/signup",
+            json={
+                "full_name": "User B",
+                "email": "userb@example.com",
+                "password": second_password,
+                "confirm_password": second_password,
+                "accept_terms": True,
+            },
+        )
+        token = re.search(r"token=([A-Za-z0-9_\-]+)", email_outbox[-1].text_body).group(1)
+        client.post("/api/auth/verify-email", json={"token": token})
+        login_resp = client.post("/api/auth/login", json={"email": "userb@example.com", "password": second_password})
+        csrf_b = login_resp.cookies["aiagent_csrf"]
+
+        conv = client.post(
+            "/api/agent/conversations", json={"mode": "chat"}, headers={"X-CSRF-Token": csrf_b}
+        ).json()
+
+        fake = _FakeProvider(chunks=["OK"])
+        _patch_provider(monkeypatch, fake)
+
+        client.post(
+            f"/api/agent/conversations/{conv['id']}/messages",
+            json={"content": "Hello"},
+            headers={"X-CSRF-Token": csrf_b},
+        )
+        assert "Confidential Plan" not in fake.received_system_prompt
+
     def test_send_message_creates_history_entry(self, auth_client, monkeypatch):
         client, csrf = auth_client
         conv = client.post(
