@@ -103,9 +103,12 @@ class Settings(BaseSettings):
     # veo-2.0-generate-001 was retired / is no longer served by the Gemini
     # API's predictLongRunning endpoint (returns 404 "not found ... or is
     # not supported for predictLongRunning") — veo-3.1-generate-preview is
-    # the currently supported model as of this writing. Override via
+    # the currently supported model as of this writing, confirmed with a
+    # real API key: the request is now accepted (a 429 quota/billing
+    # response came back, not a 404 unknown-model response). Override via
     # GEMINI_VIDEO_MODEL if Google ships a newer one before this default
-    # is updated again.
+    # is updated again — do not revert to veo-2.0-generate-001, it is
+    # confirmed gone from predictLongRunning.
     gemini_video_model: str = "veo-3.1-generate-preview"
 
     # --- OpenAI image generation ---
@@ -114,7 +117,13 @@ class Settings(BaseSettings):
     # picks "local" or "cloud"; when "cloud", this key is what the image
     # factory actually uses (see app/integrations/generation/image/factory.py).
     openai_api_key: str | None = None
-    openai_image_model: str = "dall-e-3"
+    # dall-e-3 was rejected by a real account/key with "The model
+    # 'dall-e-3' does not exist" (400, image_generation_user_error) —
+    # gpt-image-1 is OpenAI's current image-generation model and the one
+    # newer API keys/projects are provisioned against. Override via
+    # OPENAI_IMAGE_MODEL if your account needs a different one (check
+    # with GET https://api.openai.com/v1/models using your own key).
+    openai_image_model: str = "gpt-image-1"
 
     # --- Storage provider ---
     storage_provider: Literal["local"] = "local"
