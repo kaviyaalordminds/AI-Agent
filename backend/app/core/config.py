@@ -8,6 +8,7 @@ selected purely through environment configuration.
 """
 from functools import lru_cache
 from typing import Literal
+from urllib.parse import urlsplit, urlunsplit
 
 from pydantic import EmailStr, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -24,18 +25,20 @@ class Settings(BaseSettings):
     app_env: Environment = "development"
     debug: bool = True
     api_prefix: str = "/api"
-    # frontend_url drives the CORS allow-list (see main.py) and MUST match
-    # the exact origin the browser opens the frontend from — "localhost"
-    # and "127.0.0.1" are different *sites* (not just origins) for cookie
-    # purposes, even though both point at the same machine. This matters
-    # a lot here: session cookies are SameSite=Lax (see
-    # app/security/sessions.py), so if the frontend's own origin doesn't
-    # match the host used for backend API calls, the browser silently
-    # accepts the Set-Cookie on login and then refuses to attach it on
-    # the very next request — login appears to succeed but immediately
-    # bounces back to the login page. Keep this, frontend/assets/js/
-    # config.js's apiBase, and whatever host you actually open the
-    # frontend at, all using the SAME hostname (default: "localhost").
+    # frontend_url is the PRIMARY frontend origin (used to build links in
+    # emails, etc.) and drives resolved_cors_origins below (see main.py).
+    # "localhost" and "127.0.0.1" are different *sites* (not just
+    # origins) for cookie purposes, even though both point at the same
+    # machine — session cookies are SameSite=Lax (see
+    # app/security/sessions.py), so a mismatch between the frontend's own
+    # origin and the host its JS calls the API on silently breaks login
+    # (Set-Cookie accepted, but never sent back — see
+    # frontend/assets/js/config.js for the full story). This no longer
+    # requires picking one hostname and sticking to it everywhere:
+    # config.js derives its apiBase from window.location.hostname, and
+    # resolved_cors_origins (below) trusts both "localhost" and
+    # "127.0.0.1" on this port — so the app works correctly opened at
+    # either hostname, never mixed within one page load.
     frontend_url: str = "http://localhost:5173"
     backend_url: str = "http://localhost:8000"
 
@@ -198,6 +201,30 @@ class Settings(BaseSettings):
     @property
     def is_production(self) -> bool:
         return self.app_env == "production"
+
+    @property
+    def resolved_cors_origins(self) -> list[str]:
+        """The exact origin(s) CORSMiddleware trusts (see main.py) —
+        never a wildcard, since allow_credentials=True requires an
+        explicit list. If frontend_url's host is "localhost" or
+        "127.0.0.1" (the two local-dev hostnames that are the same
+        machine but different browser *origins*/*sites*), both variants
+        are trusted on the same scheme/port so opening the app at either
+        one works — frontend/assets/js/config.js derives its apiBase from
+        window.location.hostname, so whichever one the frontend is opened
+        at, it always calls the matching backend hostname, keeping every
+        request same-site (SameSite=Lax cookies, see
+        app/security/sessions.py). Any other configured host (a real
+        deployment) is trusted as exactly the one origin given."""
+        parsed = urlsplit(self.frontend_url)
+        local_hosts = {"localhost", "127.0.0.1"}
+        if parsed.hostname not in local_hosts:
+            return [self.frontend_url]
+        origins = []
+        for host in local_hosts:
+            netloc = f"{host}:{parsed.port}" if parsed.port else host
+            origins.append(urlunsplit((parsed.scheme, netloc, "", "", "")))
+        return origins
 
     @property
     def resolved_ai_runtime_mode(self) -> AIRuntimeMode:

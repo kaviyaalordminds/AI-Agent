@@ -577,21 +577,29 @@ python3 -m http.server 5173      # macOS/Linux
 py -m http.server 5173           # Windows
 ```
 
-Open http://localhost:5173. The frontend calls the backend at
-`http://localhost:8000/api` by default (see `frontend/assets/js/config.js`
-to override for a different backend origin).
+Open http://localhost:5173 (or http://127.0.0.1:5173 — both work). The
+frontend calls the backend on port 8000 using whichever of those two
+hostnames the page itself was opened at (see
+`frontend/assets/js/config.js`'s `apiBase`, derived from
+`window.location.hostname`; override `window.__AIAGENT_API_BASE__` for a
+different backend origin entirely).
 
-**Note:** the backend's CORS allowlist is `FRONTEND_URL` from `.env`
-(default `http://localhost:5173`) — the origin you open the frontend
-from must match exactly (`localhost`, not `127.0.0.1`, unless you change
-both). This matters beyond CORS, too: session cookies are
+**Note:** the backend's CORS allowlist is derived from `FRONTEND_URL` in
+`.env` (default `http://localhost:5173`) via `resolved_cors_origins` in
+`app/core/config.py` — when `FRONTEND_URL`'s host is `localhost` or
+`127.0.0.1`, *both* hostnames on that port are trusted, not just the one
+configured. This isn't just a CORS nicety: session cookies are
 `SameSite=Lax`, and `localhost`/`127.0.0.1` are different *sites* for
-cookie purposes even on the same machine. If the frontend's origin and
-`apiBase` (`frontend/assets/js/config.js`) don't use the same hostname,
-login silently "succeeds" (the `Set-Cookie` is accepted) but the very
-next request comes back 401 and bounces you straight back to the login
-page — no CORS error, no obvious clue. Keep `FRONTEND_URL`, `apiBase`,
-and the URL you actually open, all on the same hostname.
+cookie purposes even on the same machine — if the page's own origin and
+the host its JS calls the API on ever mismatch, login silently
+"succeeds" (the `Set-Cookie` is accepted) but the very next request
+comes back 401 and bounces you straight back to the login page. Since
+`apiBase` now always follows the page's own hostname automatically, this
+class of bug is no longer possible in local dev — open the app at
+either hostname and everything (CORS and cookies) stays consistent. A
+real deployment's `FRONTEND_URL` (anything other than `localhost`/
+`127.0.0.1`) is trusted as exactly that one configured origin, same as
+before.
 
 ### Tests
 

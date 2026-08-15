@@ -34,7 +34,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.frontend_url],
+    allow_origins=settings.resolved_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -63,10 +63,29 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):
     logger.exception("Unhandled exception on %s %s", request.method, request.url.path)
-    return JSONResponse(
+    response = JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={"detail": "An unexpected server error occurred."},
     )
+    # Starlette wires a handler registered for the bare `Exception` class
+    # to ServerErrorMiddleware, not ExceptionMiddleware — and
+    # ServerErrorMiddleware sits OUTSIDE CORSMiddleware in the ASGI stack
+    # (see Starlette's Starlette.build_middleware_stack: `if key in (500,
+    # Exception): error_handler = value`, which becomes
+    # ServerErrorMiddleware's handler, added before self.user_middleware).
+    # That means this response's Access-Control-* headers are never added
+    # by CORSMiddleware, and the browser reports every single backend
+    # exception as a CORS failure ("No 'Access-Control-Allow-Origin'
+    # header is present") no matter what actually went wrong — reproduced
+    # and confirmed directly against this handler, not assumed. Add the
+    # header ourselves, mirroring the exact allow-list CORSMiddleware
+    # itself uses (settings.frontend_url) so this never reflects an
+    # arbitrary Origin back to the caller.
+    origin = request.headers.get("origin")
+    if origin in settings.resolved_cors_origins:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+    return response
 
 
 app.include_router(auth_router, prefix=settings.api_prefix)
