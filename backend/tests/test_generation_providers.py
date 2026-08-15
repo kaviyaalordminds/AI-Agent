@@ -277,6 +277,92 @@ class TestGeminiVideoProviderErrorClassification:
             assert excinfo.value.error_type == "generation_failed"
 
 
+class TestSecretsNeverLeakInProviderErrors:
+    """The Phase 10 audit found only one narrow secrets-exposure test
+    existed (test_system.py::test_never_exposes_secrets, Anthropic-only,
+    two endpoints) — the more important, completely untested path is
+    whether a REAL (but invalid/expired) configured API key ends up
+    inside the error text a provider raises, which flows straight into
+    GenerationJob.error and is returned to the job's owner via
+    GET /api/generation/{image,video}/{id}. A key embedded in a request
+    URL query string (Gemini) is a real risk if an underlying exception's
+    str() ever includes the full URL — verified empirically that httpx's
+    RequestError subclasses do NOT include the URL in str(exc) by
+    default, and these tests lock that behavior in as a regression
+    guard, not just an assumption."""
+
+    _REAL_LOOKING_KEY = "sk-real-secret-abcdef1234567890"
+
+    @pytest.mark.asyncio
+    async def test_openai_401_response_body_error_never_contains_the_configured_key(self):
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(401, json={"error": {"message": "Invalid API key.", "code": "invalid_api_key"}})
+
+        provider = OpenAIImageProvider(
+            api_key=self._REAL_LOOKING_KEY, model="gpt-image-1", transport=httpx.MockTransport(handler)
+        )
+        with pytest.raises(GenerationProviderAuthError) as excinfo:
+            await provider.generate("a red apple")
+        assert self._REAL_LOOKING_KEY not in str(excinfo.value)
+
+    @pytest.mark.asyncio
+    async def test_openai_connect_error_never_contains_the_configured_key(self):
+        """OpenAI sends the key as an Authorization header (not a URL query
+        param), but this still confirms the network-failure error path is
+        clean end to end."""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            raise httpx.ConnectError("connection refused")
+
+        provider = OpenAIImageProvider(
+            api_key=self._REAL_LOOKING_KEY, model="gpt-image-1", transport=httpx.MockTransport(handler)
+        )
+        with pytest.raises(GenerationProviderUnavailableError) as excinfo:
+            await provider.generate("a red apple")
+        assert self._REAL_LOOKING_KEY not in str(excinfo.value)
+
+    @pytest.mark.asyncio
+    async def test_gemini_401_response_body_error_never_contains_the_configured_key(self):
+        """Gemini sends the key as a URL query param (?key=...) — the
+        highest-risk provider for this class of leak."""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(401, json={"error": {"code": 401, "message": "API key not valid.", "status": "UNAUTHENTICATED"}})
+
+        provider = GeminiVideoProvider(api_key=self._REAL_LOOKING_KEY, model="veo-3.1-generate-preview")
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            with pytest.raises(GenerationProviderAuthError) as excinfo:
+                await provider._submit(client, {"prompt": "a car"})
+        assert self._REAL_LOOKING_KEY not in str(excinfo.value)
+
+    @pytest.mark.asyncio
+    async def test_gemini_connect_error_never_contains_the_configured_key(self):
+        """The highest-risk path: the key rides in the request URL
+        (params={"key": ...}), and a raw connection-error exception could
+        plausibly stringify to include that URL."""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            raise httpx.ConnectError("connection refused")
+
+        provider = GeminiVideoProvider(api_key=self._REAL_LOOKING_KEY, model="veo-3.1-generate-preview")
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            with pytest.raises(GenerationProviderUnavailableError) as excinfo:
+                await provider._submit(client, {"prompt": "a car"})
+        assert self._REAL_LOOKING_KEY not in str(excinfo.value)
+
+    @pytest.mark.asyncio
+    async def test_gemini_download_connect_error_never_contains_the_configured_key(self):
+        provider = GeminiVideoProvider(api_key=self._REAL_LOOKING_KEY, model="veo-3.1-generate-preview")
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            raise httpx.ConnectError("connection refused")
+
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            with pytest.raises(GenerationProviderUnavailableError) as excinfo:
+                await provider._download(client, "https://generativelanguage.googleapis.com/v1beta/files/abc")
+        assert self._REAL_LOOKING_KEY not in str(excinfo.value)
+
+
 class TestClassifyHttpError:
     def test_429_is_quota_exceeded(self):
         assert classify_http_error(429, "") is GenerationProviderQuotaExceededError

@@ -212,6 +212,60 @@ class TestAudioJobEndToEnd:
         assert client.get(f"/api/jobs/{job_id}").status_code == 404
         assert client.get(f"/api/jobs/{job_id}/download").status_code == 404
 
+    def test_cancel_is_isolated_between_users(self, auth_client, client, email_outbox, monkeypatch):
+        """A real gap found by the Phase 10 audit: list/get/download
+        isolation was tested for jobs, but POST /jobs/{id}/cancel never
+        had its ownership check (get_owned_job) exercised — a second
+        user's cancel attempt must 404, not silently cancel someone
+        else's queued job."""
+        import re
+
+        import app.jobs.service as jobs_service_module
+
+        class _NoopQueue:
+            def submit(self, job_id):
+                pass  # keeps the job "queued" so it's still cancellable
+
+        monkeypatch.setattr(jobs_service_module, "get_job_queue", lambda: _NoopQueue())
+
+        owner_client, owner_csrf = auth_client
+        resp = owner_client.post(
+            "/api/jobs/audio", json={"text": "Owner's job, not cancellable by anyone else."},
+            headers={"X-CSRF-Token": owner_csrf},
+        )
+        job_id = resp.json()["id"]
+        assert resp.json()["status"] == "queued"
+
+        second_password = "Str0ng!Passw0rd"
+        client.post(
+            "/api/auth/signup",
+            json={
+                "full_name": "Second User",
+                "email": "second-jobs-cancel@example.com",
+                "password": second_password,
+                "confirm_password": second_password,
+                "accept_terms": True,
+            },
+        )
+        token = re.search(r"token=([A-Za-z0-9_\-]+)", email_outbox[-1].text_body).group(1)
+        client.post("/api/auth/verify-email", json={"token": token})
+        login_resp = client.post(
+            "/api/auth/login", json={"email": "second-jobs-cancel@example.com", "password": second_password}
+        )
+        second_csrf = login_resp.cookies["aiagent_csrf"]
+
+        cancel_resp = client.post(f"/api/jobs/{job_id}/cancel", headers={"X-CSRF-Token": second_csrf})
+        assert cancel_resp.status_code == 404
+
+        # auth_client's client and this test's separately-injected `client`
+        # are the literal same TestClient/cookie-jar object (pytest fixture
+        # caching) — the second user's login above already overwrote the
+        # owner's session cookies in that shared jar, so re-login as the
+        # owner before checking the job is still queued (see the identical
+        # pattern in test_history.py::test_history_entry_ownership_isolation).
+        client.post("/api/auth/login", json={"email": "owner@example.com", "password": "Str0ng!Passw0rd"})
+        assert client.get(f"/api/jobs/{job_id}").json()["status"] == "queued"
+
     def test_project_association(self, auth_client):
         client, csrf = auth_client
         project = client.post(

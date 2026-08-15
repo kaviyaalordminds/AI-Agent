@@ -261,6 +261,30 @@ class TestVideoGenerationEndpoint:
         )
         assert resp.status_code == 422
 
+    def test_oversized_reference_image_returns_clean_413_not_a_crash(self, auth_client):
+        """A real gap found by the Phase 10 audit: a validly-base64
+        reference image between MAX_UPLOAD_FILE_SIZE_MB (25MB, app/core/
+        config.py) and the schema's own max_length ceiling (~28.6MB
+        decoded) passed Pydantic validation, then hit
+        get_storage_provider().write() directly in
+        create_video_generation (app/api/generation/router.py) with no
+        try/except around it — FileTooLargeError had no handler
+        registered and fell through to a raw 500. Now registered in
+        app/main.py; this proves it's a clean 413, not a crash."""
+        import base64
+
+        oversized_bytes = b"\x00" * (26 * 1024 * 1024)  # 26MB > the 25MB limit
+        encoded = base64.b64encode(oversized_bytes).decode()
+
+        client, csrf = auth_client
+        resp = client.post(
+            "/api/generation/video",
+            json={"prompt": "a car", "reference_image_base64": encoded},
+            headers={"X-CSRF-Token": csrf},
+        )
+        assert resp.status_code == 413
+        assert "detail" in resp.json()
+
     def test_honestly_fails_when_no_provider_configured(self, auth_client):
         client, csrf = auth_client
         resp = client.post(
@@ -348,6 +372,24 @@ class TestVideoGenerationEndpoint:
         assert job["status"] == "failed"
         assert "failed" in job["error"].lower()
         assert job["error_type"] == "generation_failed"
+
+    def test_isolated_between_users(self, auth_client, client, email_outbox, monkeypatch):
+        """The image-generation isolation test (TestImageGenerationEndpoint
+        above) has an equivalent, but video never had its own — a real gap
+        found by the Phase 10 audit."""
+        import app.jobs.worker as worker_module
+
+        monkeypatch.setattr(worker_module, "get_video_provider", lambda: _FakeVideoProvider())
+        owner_client, owner_csrf = auth_client
+        resp = owner_client.post(
+            "/api/generation/video", json={"prompt": "owner's private video"}, headers={"X-CSRF-Token": owner_csrf}
+        )
+        job_id = resp.json()["id"]
+        _poll_until_terminal(owner_client, f"/api/generation/video/{job_id}")
+
+        _signup_second_user(client, email_outbox, email="second-video@example.com")
+        assert client.get(f"/api/generation/video/{job_id}").status_code == 404
+        assert client.get(f"/api/generation/video/{job_id}/download").status_code == 404
 
     def test_invalid_project_id_returns_404(self, auth_client):
         client, csrf = auth_client

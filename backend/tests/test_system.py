@@ -1,3 +1,6 @@
+import pytest
+
+
 def test_bare_health_check_no_auth_required(client):
     resp = client.get("/health")
     assert resp.status_code == 200
@@ -98,3 +101,33 @@ class TestProvidersHealthEndpoint:
 
         cap_body = client.get("/api/system/capabilities").json()
         assert "sk-ant-super-secret-value-should-not-leak" not in str(cap_body)
+
+    @pytest.mark.parametrize(
+        "settings_field,secret_value",
+        [
+            ("google_api_key", "AIzaSy-super-secret-google-value"),
+            ("gemini_api_key", "AQ-super-secret-gemini-value"),
+            ("openai_api_key", "sk-proj-super-secret-openai-value"),
+            ("netlify_api_token", "nfp_super-secret-netlify-value"),
+            ("vercel_api_token", "vercel-super-secret-token-value"),
+        ],
+    )
+    def test_never_exposes_secrets_for_every_configured_provider(
+        self, auth_client, monkeypatch, settings_field, secret_value
+    ):
+        """The Phase 10 audit found test_never_exposes_secrets above only
+        ever exercised anthropic_api_key — every other provider credential
+        in app/core/config.py (Google/Gemini, OpenAI, Netlify, Vercel) had
+        never been checked against either the health or capabilities
+        endpoint."""
+        client, _csrf = auth_client
+        from app.core.config import get_settings
+
+        settings = get_settings()
+        monkeypatch.setattr(settings, settings_field, secret_value)
+
+        body = client.get("/api/system/providers/health").json()
+        assert secret_value not in str(body)
+
+        cap_body = client.get("/api/system/capabilities").json()
+        assert secret_value not in str(cap_body)

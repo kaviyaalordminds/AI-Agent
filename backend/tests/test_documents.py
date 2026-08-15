@@ -283,7 +283,7 @@ class TestDocumentsEndpoint:
         )
         doc_id = resp.json()["id"]
 
-        delete_resp = client.delete(f"/api/documents/{doc_id}")
+        delete_resp = client.delete(f"/api/documents/{doc_id}", headers={"X-CSRF-Token": csrf})
         assert delete_resp.status_code == 204
 
         assert client.get(f"/api/documents/{doc_id}").status_code == 404
@@ -331,3 +331,42 @@ class TestDocumentsEndpoint:
         assert client.get("/api/documents").json() == []
         assert client.get(f"/api/documents/{doc_id}").status_code == 404
         assert client.get(f"/api/documents/{doc_id}/download").status_code == 404
+
+    def test_delete_is_isolated_between_users(self, auth_client, client, email_outbox, monkeypatch, db_session):
+        """A real gap found by the Phase 10 audit: only list/get/download
+        isolation was tested for documents — DELETE (recently fixed to
+        require CSRF, see app/api/documents/router.py) never had its
+        ownership check exercised at all."""
+        owner_client, owner_csrf = auth_client
+        _patch_provider(monkeypatch, _FakeProvider(_SAMPLE_DRAFT))
+        create_resp = owner_client.post(
+            "/api/documents",
+            json={"prompt": "Owner's document that must survive.", "format": "markdown"},
+            headers={"X-CSRF-Token": owner_csrf},
+        )
+        doc_id = create_resp.json()["id"]
+
+        second_password = "Str0ng!Passw0rd"
+        client.post(
+            "/api/auth/signup",
+            json={
+                "full_name": "Second User",
+                "email": "second-docs-delete@example.com",
+                "password": second_password,
+                "confirm_password": second_password,
+                "accept_terms": True,
+            },
+        )
+        token = re.search(r"token=([A-Za-z0-9_\-]+)", email_outbox[-1].text_body).group(1)
+        client.post("/api/auth/verify-email", json={"token": token})
+        login_resp = client.post(
+            "/api/auth/login", json={"email": "second-docs-delete@example.com", "password": second_password}
+        )
+        second_csrf = login_resp.cookies["aiagent_csrf"]
+
+        delete_resp = client.delete(f"/api/documents/{doc_id}", headers={"X-CSRF-Token": second_csrf})
+        assert delete_resp.status_code == 404
+
+        from app.models.document import Document
+
+        assert db_session.query(Document).filter(Document.id == doc_id).first() is not None

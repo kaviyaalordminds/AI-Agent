@@ -123,7 +123,12 @@ def download_document(document_id: uuid.UUID, user: User = Depends(get_current_u
 
 
 @router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_document(document_id: uuid.UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def delete_document(
+    document_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    _csrf: None = Depends(require_csrf),
+):
     document = _get_owned_document(db, user, document_id)
     if document.storage_ref:
         storage_provider = get_storage_provider()

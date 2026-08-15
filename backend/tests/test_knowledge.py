@@ -379,6 +379,46 @@ class TestGapAnalysisEndpoint:
         resp = client.get("/api/knowledge/gaps/00000000-0000-0000-0000-000000000000")
         assert resp.status_code == 404
 
+    def test_analysis_ownership_isolation(self, auth_client, client, email_outbox):
+        """A real gap found by the Phase 10 audit: KnowledgeAnalysis had
+        no cross-user isolation test at all, unlike every other resource
+        type. GET /api/knowledge/gaps/{id} must 404 for a real analysis
+        that belongs to a different user, and the list endpoint must
+        never include it either."""
+        import re
+
+        owner_client, owner_csrf = auth_client
+        created = owner_client.post(
+            "/api/knowledge/gaps",
+            json={"query": "What am I missing for a manufacturing HRMS?"},
+            headers={"X-CSRF-Token": owner_csrf},
+        )
+        assert created.status_code == 503
+        analysis_id = owner_client.get("/api/knowledge/gaps").json()[0]["id"]
+
+        second_password = "Str0ng!Passw0rd"
+        client.post(
+            "/api/auth/signup",
+            json={
+                "full_name": "Second User",
+                "email": "second-knowledge@example.com",
+                "password": second_password,
+                "confirm_password": second_password,
+                "accept_terms": True,
+            },
+        )
+        token = re.search(r"token=([A-Za-z0-9_\-]+)", email_outbox[-1].text_body).group(1)
+        client.post("/api/auth/verify-email", json={"token": token})
+        client.post(
+            "/api/auth/login", json={"email": "second-knowledge@example.com", "password": second_password}
+        )
+
+        get_resp = client.get(f"/api/knowledge/gaps/{analysis_id}")
+        assert get_resp.status_code == 404
+
+        list_resp = client.get("/api/knowledge/gaps")
+        assert list_resp.json() == []
+
     def test_gap_analysis_with_invalid_project_returns_404(self, auth_client):
         client, csrf = auth_client
         resp = client.post(

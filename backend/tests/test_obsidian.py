@@ -235,6 +235,129 @@ def test_vault_isolation_between_users(auth_client, client, email_outbox):
     assert client.get("/api/obsidian/notes/01-Knowledge/Secret.md").status_code == 404
 
 
+def _signup_and_login_second_user(client, email_outbox, email="second-write@example.com"):
+    import re
+
+    password = "Str0ng!Passw0rd"
+    client.post(
+        "/api/auth/signup",
+        json={
+            "full_name": "Second User",
+            "email": email,
+            "password": password,
+            "confirm_password": password,
+            "accept_terms": True,
+        },
+    )
+    token = re.search(r"token=([A-Za-z0-9_\-]+)", email_outbox[-1].text_body).group(1)
+    client.post("/api/auth/verify-email", json={"token": token})
+    login_resp = client.post("/api/auth/login", json={"email": email, "password": password})
+    return login_resp.cookies["aiagent_csrf"]
+
+
+class TestWriteOperationIsolationBetweenUsers:
+    """The Phase 10 audit found test_vault_isolation_between_users above
+    only exercises read/list isolation — update/move/delete on a path
+    that lives in the owner's vault, attempted from a second user's
+    session, was never confirmed to 404 rather than mutating (or
+    reaching into) the owner's vault. Each provider is scoped to
+    get_obsidian_provider(user.id) (app/api/obsidian/router.py), so this
+    also serves as regression coverage for that per-user scoping."""
+
+    @staticmethod
+    def _relogin_as_owner(client):
+        """auth_client's client and this test's separately-injected `client`
+        are the literal same TestClient/cookie-jar object (pytest fixture
+        caching) — the second user's login below already overwrote the
+        owner's session cookies in that shared jar, so the owner must
+        re-login before any post-mutation check (see the identical pattern
+        in test_history.py::test_history_entry_ownership_isolation)."""
+        client.post("/api/auth/login", json={"email": "owner@example.com", "password": "Str0ng!Passw0rd"})
+
+    def test_update_is_isolated(self, auth_client, client, email_outbox):
+        owner_client, owner_csrf = auth_client
+        owner_client.post(
+            "/api/obsidian/notes",
+            json={"path": "01-Knowledge/Secret.md", "content": "owner's original content"},
+            headers={"X-CSRF-Token": owner_csrf},
+        )
+        second_csrf = _signup_and_login_second_user(client, email_outbox, "second-update@example.com")
+
+        resp = client.put(
+            "/api/obsidian/notes/01-Knowledge/Secret.md",
+            json={"content": "tampered by second user"},
+            headers={"X-CSRF-Token": second_csrf},
+        )
+        assert resp.status_code == 404
+
+        self._relogin_as_owner(client)
+        owner_read = client.get("/api/obsidian/notes/01-Knowledge/Secret.md")
+        assert owner_read.json()["content"] == "owner's original content"
+
+    def test_move_is_isolated(self, auth_client, client, email_outbox):
+        owner_client, owner_csrf = auth_client
+        owner_client.post(
+            "/api/obsidian/notes",
+            json={"path": "01-Knowledge/Secret.md", "content": "owner's note"},
+            headers={"X-CSRF-Token": owner_csrf},
+        )
+        second_csrf = _signup_and_login_second_user(client, email_outbox, "second-move@example.com")
+
+        resp = client.post(
+            "/api/obsidian/notes/01-Knowledge/Secret.md/move",
+            json={"new_path": "hijacked.md"},
+            headers={"X-CSRF-Token": second_csrf},
+        )
+        assert resp.status_code == 404
+        # The second user's own vault must not contain the hijacked path either.
+        assert client.get("/api/obsidian/notes/hijacked.md").status_code == 404
+
+        self._relogin_as_owner(client)
+        assert client.get("/api/obsidian/notes/01-Knowledge/Secret.md").status_code == 200
+
+    def test_delete_is_isolated(self, auth_client, client, email_outbox):
+        owner_client, owner_csrf = auth_client
+        owner_client.post(
+            "/api/obsidian/notes",
+            json={"path": "01-Knowledge/Secret.md", "content": "owner's note"},
+            headers={"X-CSRF-Token": owner_csrf},
+        )
+        second_csrf = _signup_and_login_second_user(client, email_outbox, "second-delete@example.com")
+
+        resp = client.delete(
+            "/api/obsidian/notes/01-Knowledge/Secret.md", headers={"X-CSRF-Token": second_csrf}
+        )
+        assert resp.status_code == 404
+
+        self._relogin_as_owner(client)
+        assert client.get("/api/obsidian/notes/01-Knowledge/Secret.md").status_code == 200
+
+    def test_append_creates_in_second_users_own_vault_not_owners(self, auth_client, client, email_outbox):
+        """append creates-if-missing by design (see test_append_creates_if_missing
+        above) — confirms that when the path doesn't exist in the second
+        user's own vault, it creates a new note there rather than ever
+        touching the owner's note of the same path."""
+        owner_client, owner_csrf = auth_client
+        owner_client.post(
+            "/api/obsidian/notes",
+            json={"path": "01-Knowledge/Secret.md", "content": "owner's original content"},
+            headers={"X-CSRF-Token": owner_csrf},
+        )
+        second_csrf = _signup_and_login_second_user(client, email_outbox, "second-append@example.com")
+
+        resp = client.post(
+            "/api/obsidian/notes/01-Knowledge/Secret.md/append",
+            json={"content": "second user's own new note"},
+            headers={"X-CSRF-Token": second_csrf},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["content"] == "second user's own new note"
+
+        self._relogin_as_owner(client)
+        owner_read = client.get("/api/obsidian/notes/01-Knowledge/Secret.md")
+        assert owner_read.json()["content"] == "owner's original content"
+
+
 class TestAgentKnowledgeModeGrounding:
     def _fake_provider(self, chunks):
         class _FakeProvider:

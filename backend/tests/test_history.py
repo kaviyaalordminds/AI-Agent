@@ -153,6 +153,25 @@ def test_delete_history_entry(auth_client, db_session):
     assert list_resp.json()["total"] == 0
 
 
+def test_history_filtered_by_project_id(auth_client, db_session):
+    """GET /api/history?project_id= — a real gap found by the Phase 10
+    audit: the router supports this filter (app/api/history/router.py)
+    but no test exercised it."""
+    client, csrf = auth_client
+    project_resp = client.post("/api/projects", json={"name": "Filtered Project"}, headers={"X-CSRF-Token": csrf})
+    project_id = project_resp.json()["id"]
+
+    user_id = _current_user_id(db_session)
+    _seed_entry(db_session, user_id, title="In the project", project_id=project_id)
+    _seed_entry(db_session, user_id, title="Not in any project")
+
+    resp = client.get(f"/api/history?project_id={project_id}")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["total"] == 1
+    assert body["items"][0]["title"] == "In the project"
+
+
 def test_history_entry_ownership_isolation(auth_client, client, db_session, email_outbox):
     owner_client, _owner_csrf = auth_client
     user_id = _current_user_id(db_session)
@@ -173,12 +192,23 @@ def test_history_entry_ownership_isolation(auth_client, client, db_session, emai
     )
     token = re.search(r"token=([A-Za-z0-9_\-]+)", email_outbox[-1].text_body).group(1)
     client.post("/api/auth/verify-email", json={"token": token})
-    client.post(
+    login_resp = client.post(
         "/api/auth/login", json={"email": "second@example.com", "password": second_password}
     )
+    second_csrf = login_resp.cookies["aiagent_csrf"]
 
     resp = client.get("/api/history")
     assert resp.json()["total"] == 0
 
-    delete_resp = client.delete(f"/api/history/{entry.id}", headers={"X-CSRF-Token": "x"})
-    assert delete_resp.status_code in (403, 404)
+    # A real CSRF token from the second user's own session — this must
+    # fail on ownership grounds (404), not incidentally on a bogus-token
+    # 403 that would never actually exercise _get_owned_entry's isolation
+    # check (a real bug found by the Phase 10 audit: the old version of
+    # this test used a fake "x" token, so the CSRF check rejected the
+    # request before ownership was ever evaluated).
+    delete_resp = client.delete(f"/api/history/{entry.id}", headers={"X-CSRF-Token": second_csrf})
+    assert delete_resp.status_code == 404
+
+    # And the entry must still exist in the database — the second user's
+    # request never actually deleted it.
+    assert db_session.query(HistoryEntry).filter(HistoryEntry.id == entry.id).first() is not None

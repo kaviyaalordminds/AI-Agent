@@ -19,6 +19,7 @@ from app.api.system.router import router as system_router
 from app.api.users.router import router as users_router
 from app.core.config import get_settings
 from app.core.logging import configure_logging
+from app.integrations.storage.errors import FileTooLargeError, InvalidStoragePathError
 
 settings = get_settings()
 configure_logging()
@@ -57,6 +58,29 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         content={"detail": "Validation failed.", "errors": errors},
+    )
+
+
+@app.exception_handler(FileTooLargeError)
+async def file_too_large_handler(request: Request, exc: FileTooLargeError):
+    """A few endpoints (video reference images, AI-drafted/structured
+    document rendering) write caller-influenced data through
+    StorageProvider synchronously in the request path, outside the job
+    queue's own StorageError handling (see app/jobs/worker.py) — without
+    this, an over-the-limit write raised FileTooLargeError, which fell
+    through to the generic 500 handler below instead of a clean 4xx."""
+    return JSONResponse(
+        status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+        content={"detail": str(exc)},
+    )
+
+
+@app.exception_handler(InvalidStoragePathError)
+async def invalid_storage_path_handler(request: Request, exc: InvalidStoragePathError):
+    logger.warning("Invalid storage path: %s", exc)
+    return JSONResponse(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        content={"detail": "Invalid file reference."},
     )
 
 
