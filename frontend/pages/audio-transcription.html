@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Spreadsheet Generation · Shadow AI</title>
+<title>Audio Transcription · Shadow AI</title>
 <script>
   (function () {
     var theme = localStorage.getItem("aiagent:theme") || "dark";
@@ -28,7 +28,7 @@
     <header class="app-topbar">
       <div class="d-flex align-items-center gap-3">
         <button type="button" class="sidebar-collapse-btn d-md-none" id="mobile-sidebar-toggle" aria-label="Toggle sidebar" title="Toggle sidebar"><i class="bi bi-list"></i></button>
-        <h5 class="mb-0">Spreadsheet Generation</h5>
+        <h5 class="mb-0">Audio Transcription</h5>
       </div>
       <div class="d-flex align-items-center gap-3">
         <div class="theme-toggle" data-theme-toggle>
@@ -47,54 +47,58 @@
     </header>
 
     <main class="app-content">
+      <div id="capability-banner" class="capability-banner d-none">
+        <i class="bi bi-exclamation-triangle-fill"></i><span></span>
+      </div>
+
       <div class="gen-columns">
         <div>
           <div class="surface p-4 gen-form">
-            <h6 class="mb-3">Workbook details</h6>
-            <label class="field-label" for="excel-title">Title</label>
-            <input type="text" class="form-control-premium" id="excel-title" placeholder="e.g. Sales Report FY26">
-            <div class="field-error" data-error-for="title"></div>
+            <h6 class="mb-3">Upload audio</h6>
+            <label class="field-label" for="trans-file">Audio file <span style="font-weight:400; color:var(--text-muted);">(mp3, wav, m4a, mp4, webm, ogg)</span></label>
+            <input type="file" class="form-control-premium" id="trans-file" accept="audio/*,video/mp4,video/webm">
+            <div class="field-error" data-error-for="file"></div>
+            <div id="trans-file-name" class="mt-2" style="font-size:0.82rem; color:var(--text-muted);"></div>
 
-            <div class="mb-1 mt-3">
-              <label class="field-label" for="excel-project">Project <span style="font-weight:400; color:var(--text-muted);">(optional)</span></label>
-              <select class="form-control-premium" id="excel-project">
+            <div class="mb-3 mt-3">
+              <label class="field-label" for="trans-language">Language <span style="font-weight:400; color:var(--text-muted);">(optional — auto-detected if left blank)</span></label>
+              <input type="text" class="form-control-premium" id="trans-language" placeholder="e.g. en" maxlength="10">
+            </div>
+
+            <div class="mb-3">
+              <label class="field-label" for="trans-project">Project <span style="font-weight:400; color:var(--text-muted);">(optional)</span></label>
+              <select class="form-control-premium" id="trans-project">
                 <option value="">No project</option>
               </select>
             </div>
+            <button type="button" class="btn-brand" id="trans-generate-btn"><i class="bi bi-file-earmark-text"></i> Transcribe</button>
           </div>
 
-          <div class="surface p-4 mt-3">
+          <div class="surface p-4 mt-4" id="trans-result-panel" style="display:none;">
             <div class="d-flex align-items-center justify-content-between mb-3">
-              <h6 class="mb-0">Sheets</h6>
-              <span class="field-error" data-error-for="sheets" style="margin:0;"></span>
+              <h6 class="mb-0">Transcript</h6>
+              <span id="trans-result-status"></span>
             </div>
-            <div id="excel-sheets"></div>
-            <div class="add-slide-bar">
-              <button type="button" class="btn-ghost" id="excel-add-sheet"><i class="bi bi-plus-lg"></i> Add sheet</button>
-            </div>
+            <div id="trans-result-body"></div>
           </div>
 
-          <button type="button" class="btn-brand mt-3" id="excel-generate-btn"><i class="bi bi-file-earmark-spreadsheet"></i> Generate spreadsheet</button>
-
-          <div class="surface p-4 mt-4" id="excel-result-panel" style="display:none;">
-            <div class="d-flex align-items-center justify-content-between mb-3">
-              <h6 class="mb-0" id="excel-result-title">Spreadsheet</h6>
-              <span id="excel-result-status"></span>
-            </div>
-            <div id="excel-result-body"></div>
+          <div id="trans-empty-state" class="empty-state">
+            <div class="empty-icon"><i class="bi bi-file-earmark-text"></i></div>
+            <h5>No transcript yet</h5>
+            <p style="font-size:0.85rem;">Upload an audio file above to transcribe it via the configured provider.</p>
           </div>
         </div>
 
         <div class="surface p-4">
-          <h6 class="mb-3">Generated spreadsheets</h6>
-          <div id="excel-list">
+          <h6 class="mb-3">Recent transcriptions</h6>
+          <div id="trans-list">
             <div class="skeleton mb-2" style="height:56px; border-radius:10px;"></div>
             <div class="skeleton" style="height:56px; border-radius:10px;"></div>
           </div>
-          <div id="excel-list-empty" class="empty-state d-none" style="padding:1.5rem 0.5rem;">
-            <div class="empty-icon"><i class="bi bi-file-earmark-spreadsheet"></i></div>
-            <h6>No spreadsheets yet</h6>
-            <p style="font-size:0.82rem;">Spreadsheets you generate will be listed here for download.</p>
+          <div id="trans-list-empty" class="empty-state d-none" style="padding:1.5rem 0.5rem;">
+            <div class="empty-icon"><i class="bi bi-file-earmark-text"></i></div>
+            <h6>No transcriptions yet</h6>
+            <p style="font-size:0.82rem;">Files you transcribe will be listed here.</p>
           </div>
         </div>
       </div>
@@ -110,6 +114,6 @@
 <script src="../assets/js/nav.js"></script>
 <script src="../assets/js/modals.js"></script>
 <script src="../assets/js/generation-common.js"></script>
-<script src="../assets/js/excel-generation.js"></script>
+<script src="../assets/js/audio-transcription.js"></script>
 </body>
 </html>

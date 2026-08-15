@@ -29,13 +29,24 @@ class VoiceProvider(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def clone_voice(self, sample_audio: bytes, consent_confirmed: bool) -> ClonedVoiceProfile:
+    async def clone_voice(self, sample_audio: bytes, consent_confirmed: bool, name: str = "Cloned voice") -> ClonedVoiceProfile:
         """Must raise ValueError if consent_confirmed is False — cloning
         never proceeds without the caller having confirmed permission to
         use the voice. Raises GenerationProviderNotConfiguredError if
-        unavailable."""
+        unavailable. `name` is passed to the vendor for their own
+        bookkeeping only — the user-facing name lives on VoiceProfile
+        (see app/models/voice_profile.py), not read back from here."""
         raise NotImplementedError
 
     @abstractmethod
     async def synthesize_with_voice(self, text: str, profile: ClonedVoiceProfile) -> VoiceSynthesisResult:
+        raise NotImplementedError
+
+    @abstractmethod
+    async def delete_voice(self, profile: ClonedVoiceProfile) -> None:
+        """Removes the voice from the vendor's account. Called when the
+        user deletes their VoiceProfile row (see app/models/voice_profile.py)
+        — must not raise if the vendor has already lost track of this
+        voice (e.g. already deleted out of band), only on a genuine
+        failure to delete."""
         raise NotImplementedError

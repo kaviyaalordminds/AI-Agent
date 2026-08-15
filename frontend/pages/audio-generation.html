@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Spreadsheet Generation · Shadow AI</title>
+<title>Audio Generation · Shadow AI</title>
 <script>
   (function () {
     var theme = localStorage.getItem("aiagent:theme") || "dark";
@@ -28,7 +28,7 @@
     <header class="app-topbar">
       <div class="d-flex align-items-center gap-3">
         <button type="button" class="sidebar-collapse-btn d-md-none" id="mobile-sidebar-toggle" aria-label="Toggle sidebar" title="Toggle sidebar"><i class="bi bi-list"></i></button>
-        <h5 class="mb-0">Spreadsheet Generation</h5>
+        <h5 class="mb-0">Audio Generation</h5>
       </div>
       <div class="d-flex align-items-center gap-3">
         <div class="theme-toggle" data-theme-toggle>
@@ -47,54 +47,61 @@
     </header>
 
     <main class="app-content">
+      <div id="capability-banner" class="capability-banner d-none">
+        <i class="bi bi-exclamation-triangle-fill"></i><span></span>
+      </div>
+
       <div class="gen-columns">
         <div>
           <div class="surface p-4 gen-form">
-            <h6 class="mb-3">Workbook details</h6>
-            <label class="field-label" for="excel-title">Title</label>
-            <input type="text" class="form-control-premium" id="excel-title" placeholder="e.g. Sales Report FY26">
-            <div class="field-error" data-error-for="title"></div>
+            <h6 class="mb-3">Write the script</h6>
+            <textarea class="form-control-premium" id="aud-text" placeholder="Type or paste the text you want narrated." maxlength="4000"></textarea>
+            <div class="field-error" data-error-for="text"></div>
 
-            <div class="mb-1 mt-3">
-              <label class="field-label" for="excel-project">Project <span style="font-weight:400; color:var(--text-muted);">(optional)</span></label>
-              <select class="form-control-premium" id="excel-project">
+            <div class="mb-3 mt-3">
+              <label class="field-label" for="aud-voice">Voice</label>
+              <select class="form-control-premium" id="aud-voice">
+                <option value="">Default voice</option>
+              </select>
+            </div>
+
+            <label class="field-label mt-3" for="aud-speed">Speed: <span id="aud-speed-value">1.0</span>x</label>
+            <input type="range" class="form-range" id="aud-speed" min="0.5" max="2" step="0.1" value="1">
+
+            <div class="mb-3 mt-3">
+              <label class="field-label" for="aud-project">Project <span style="font-weight:400; color:var(--text-muted);">(optional)</span></label>
+              <select class="form-control-premium" id="aud-project">
                 <option value="">No project</option>
               </select>
             </div>
+            <button type="button" class="btn-brand" id="aud-generate-btn"><i class="bi bi-mic"></i> Generate audio</button>
           </div>
 
-          <div class="surface p-4 mt-3">
+          <div class="surface p-4 mt-4" id="aud-result-panel" style="display:none;">
             <div class="d-flex align-items-center justify-content-between mb-3">
-              <h6 class="mb-0">Sheets</h6>
-              <span class="field-error" data-error-for="sheets" style="margin:0;"></span>
+              <h6 class="mb-0">Result</h6>
+              <span id="aud-result-status"></span>
             </div>
-            <div id="excel-sheets"></div>
-            <div class="add-slide-bar">
-              <button type="button" class="btn-ghost" id="excel-add-sheet"><i class="bi bi-plus-lg"></i> Add sheet</button>
-            </div>
+            <div id="aud-result-body"></div>
           </div>
 
-          <button type="button" class="btn-brand mt-3" id="excel-generate-btn"><i class="bi bi-file-earmark-spreadsheet"></i> Generate spreadsheet</button>
-
-          <div class="surface p-4 mt-4" id="excel-result-panel" style="display:none;">
-            <div class="d-flex align-items-center justify-content-between mb-3">
-              <h6 class="mb-0" id="excel-result-title">Spreadsheet</h6>
-              <span id="excel-result-status"></span>
-            </div>
-            <div id="excel-result-body"></div>
+          <div id="aud-empty-state" class="empty-state">
+            <div class="empty-icon"><i class="bi bi-mic"></i></div>
+            <h5>No audio yet</h5>
+            <p style="font-size:0.85rem;">Write a script above and generate real narration via the configured provider.</p>
           </div>
         </div>
 
         <div class="surface p-4">
-          <h6 class="mb-3">Generated spreadsheets</h6>
-          <div id="excel-list">
+          <h6 class="mb-3">Recent generations</h6>
+          <div id="aud-list">
             <div class="skeleton mb-2" style="height:56px; border-radius:10px;"></div>
             <div class="skeleton" style="height:56px; border-radius:10px;"></div>
           </div>
-          <div id="excel-list-empty" class="empty-state d-none" style="padding:1.5rem 0.5rem;">
-            <div class="empty-icon"><i class="bi bi-file-earmark-spreadsheet"></i></div>
-            <h6>No spreadsheets yet</h6>
-            <p style="font-size:0.82rem;">Spreadsheets you generate will be listed here for download.</p>
+          <div id="aud-list-empty" class="empty-state d-none" style="padding:1.5rem 0.5rem;">
+            <div class="empty-icon"><i class="bi bi-soundwave"></i></div>
+            <h6>No audio yet</h6>
+            <p style="font-size:0.82rem;">Narrations you generate will be listed here.</p>
           </div>
         </div>
       </div>
@@ -110,6 +117,6 @@
 <script src="../assets/js/nav.js"></script>
 <script src="../assets/js/modals.js"></script>
 <script src="../assets/js/generation-common.js"></script>
-<script src="../assets/js/excel-generation.js"></script>
+<script src="../assets/js/audio-generation.js"></script>
 </body>
 </html>

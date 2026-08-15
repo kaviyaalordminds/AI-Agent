@@ -43,7 +43,7 @@ async function loadHistory() {
         : "No history yet";
       document.getElementById("history-empty-subtitle").textContent = filtered
         ? "Try adjusting or clearing your filters."
-        : "Actions you and the AI agent take across every tool will appear here once those modules are built.";
+        : "Actions you and Shadow AI take across every tool will appear here once those modules are built.";
     } else {
       emptyEl.classList.add("d-none");
       listEl.innerHTML = window.HistoryCommon.renderHistoryRows(res.items, { showProject: true });

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Dashboard · AI Agent Platform</title>
+<title>Dashboard · Shadow AI</title>
 <script>
   (function () {
     var theme = localStorage.getItem("aiagent:theme") || "dark";
@@ -45,11 +45,11 @@
 
     <main class="app-content">
       <h2 class="mb-1">What are we creating today?</h2>
-      <p style="color:var(--text-muted);" class="mb-4">Ask your AI agent, or jump straight into a creative tool.</p>
+      <p style="color:var(--text-muted);" class="mb-4">Ask Shadow AI, or jump straight into a creative tool.</p>
 
       <div class="glass-panel command-input-shell mb-4">
         <i class="bi bi-stars" style="color:var(--brand-400); font-size:1.2rem;"></i>
-        <input type="text" id="command-input" placeholder="Ask your AI Agent…" aria-label="Ask your AI Agent" />
+        <input type="text" id="command-input" placeholder="Ask Shadow AI…" aria-label="Ask Shadow AI" />
         <button type="button" class="btn-brand" id="command-submit" aria-label="Submit" title="Submit"><i class="bi bi-arrow-up"></i></button>
       </div>
 
@@ -90,7 +90,7 @@
             <div class="empty-state d-none" id="activity-empty">
               <div class="empty-icon"><i class="bi bi-activity"></i></div>
               <p class="mb-0">No activity yet.</p>
-              <p style="font-size:0.82rem;">Actions you and the AI agent take will appear here once the agent and history modules are built.</p>
+              <p style="font-size:0.82rem;">Actions you and Shadow AI take will appear here once the agent and history modules are built.</p>
             </div>
             <div id="dashboard-activity-list"></div>
           </div>

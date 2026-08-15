@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     # --- Core ---
-    app_name: str = "AI Agent Platform"
+    app_name: str = "Shadow AI"
     app_env: Environment = "development"
     debug: bool = True
     api_prefix: str = "/api"
@@ -166,14 +166,32 @@ class Settings(BaseSettings):
     # openai_api_key above), video uses Gemini/Veo (see
     # app/integrations/generation/video/gemini_provider.py, gemini_api_key
     # above). Audio/transcription/voice default to "local" (real local TTS
-    # via espeak-ng for audio; transcription/voice "cloud" remain
-    # configuration points for a future vendor integration). See
-    # GET /api/system/capabilities for live status of every provider.
+    # via espeak-ng for audio; a real cloud path exists for all three —
+    # audio + transcription reuse openai_api_key above, voice cloning uses
+    # elevenlabs_api_key below — set the provider to "cloud" once a key is
+    # configured). See GET /api/system/capabilities for live status of
+    # every provider.
     tts_provider: Literal["local", "cloud"] = "local"
     transcription_provider: Literal["local", "cloud"] = "local"
     image_provider: Literal["local", "cloud"] = "cloud"
     video_provider: Literal["local", "cloud"] = "cloud"
     voice_provider: Literal["local", "cloud"] = "local"
+
+    # --- OpenAI audio (TTS) + transcription (Whisper) ---
+    # Reuses openai_api_key above — the same OpenAI credential already
+    # used for image generation also covers TTS (/v1/audio/speech) and
+    # transcription (/v1/audio/transcriptions); no separate key needed.
+    openai_tts_model: str = "tts-1"
+    openai_tts_voice: str = "alloy"
+    openai_transcription_model: str = "whisper-1"
+
+    # --- ElevenLabs voice cloning ---
+    # A separate credential from OPENAI_API_KEY — OpenAI has no voice-
+    # cloning endpoint, so cloning uses ElevenLabs specifically (the
+    # most widely used voice-cloning API). Selected as the "cloud"
+    # VOICE_PROVIDER once this key is set.
+    elevenlabs_api_key: str | None = None
+    elevenlabs_voice_model: str = "eleven_multilingual_v2"
 
     # --- Deployment provider ---
     deployment_provider: Literal["local", "netlify", "vercel"] = "local"
@@ -200,7 +218,7 @@ class Settings(BaseSettings):
     smtp_password: str | None = None
     smtp_use_tls: bool = True
     email_from_address: EmailStr = "no-reply@ai-agent.dev"
-    email_from_name: str = "AI Agent Platform"
+    email_from_name: str = "Shadow AI"
 
     @field_validator("session_cookie_secure", mode="after")
     @classmethod

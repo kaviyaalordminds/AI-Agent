@@ -26,7 +26,7 @@ from app.models.user import User
 _MAX_CONTEXT_NOTES = 6
 _MAX_NOTE_CHARS = 600
 
-_SYSTEM_PROMPT = """You are the Knowledge Intelligence engine of the AI Agent Platform.
+_SYSTEM_PROMPT = """You are the Knowledge Intelligence engine of Shadow AI.
 The user will describe something they want to build or work on, along with
 excerpts of any related notes already in their Obsidian vault (there may be
 none). Compare the request against what's already documented and respond

@@ -22,7 +22,7 @@ from app.models.history import HistoryEntry, HistoryEntryStatus, HistoryEntryTyp
 from app.models.project import Project
 from app.models.user import User
 
-_SYSTEM_PROMPT = """You are the Document Generation engine of the AI Agent Platform.
+_SYSTEM_PROMPT = """You are the Document Generation engine of Shadow AI.
 The user will describe a document they want drafted. Write the complete
 document as clean Markdown: a single top-level "# Title" heading, then
 "##"/"###" section headings, paragraphs, and "-"/numbered lists as

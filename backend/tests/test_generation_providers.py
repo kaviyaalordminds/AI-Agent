@@ -4,6 +4,7 @@ import json
 import httpx
 import pytest
 
+from app.integrations.generation.audio.cloud_provider import OpenAICloudTTSProvider
 from app.integrations.generation.audio.factory import get_audio_provider
 from app.integrations.generation.errors import (
     GenerationProviderAuthError,
@@ -15,9 +16,12 @@ from app.integrations.generation.errors import (
 )
 from app.integrations.generation.image.factory import get_image_provider
 from app.integrations.generation.image.openai_provider import OpenAIImageProvider
+from app.integrations.generation.transcription.cloud_provider import OpenAICloudTranscriptionProvider
 from app.integrations.generation.transcription.factory import get_transcription_provider
 from app.integrations.generation.video.factory import get_video_provider
 from app.integrations.generation.video.gemini_provider import GeminiVideoProvider
+from app.integrations.generation.voice.base import ClonedVoiceProfile
+from app.integrations.generation.voice.cloud_provider import ElevenLabsVoiceProvider
 from app.integrations.generation.voice.factory import get_voice_provider
 
 
@@ -398,3 +402,243 @@ class TestProviderFailureIsolation:
             cap = provider.capability()
             assert cap.mode in ("local", "production")
             assert cap.reason
+
+
+class TestOpenAICloudTTSProvider:
+    @pytest.mark.asyncio
+    async def test_successful_synthesis_returns_real_bytes(self):
+        def handler(request: httpx.Request) -> httpx.Response:
+            assert request.headers["authorization"] == "Bearer test-key"
+            body = json.loads(request.content)
+            assert body == {
+                "model": "tts-1", "voice": "alloy", "input": "hello",
+                "response_format": "wav", "speed": 1.0,
+            }
+            return httpx.Response(200, content=b"RIFF-fake-wav-bytes", headers={"content-type": "audio/wav"})
+
+        provider = OpenAICloudTTSProvider(
+            api_key="test-key", model="tts-1", default_voice="alloy", transport=httpx.MockTransport(handler)
+        )
+        result = await provider.synthesize("hello")
+        assert result.data == b"RIFF-fake-wav-bytes"
+        assert result.format == "wav"
+        assert result.content_type == "audio/wav"
+
+    @pytest.mark.asyncio
+    async def test_explicit_voice_overrides_default(self):
+        def handler(request: httpx.Request) -> httpx.Response:
+            body = json.loads(request.content)
+            assert body["voice"] == "nova"
+            return httpx.Response(200, content=b"data")
+
+        provider = OpenAICloudTTSProvider(
+            api_key="test-key", model="tts-1", default_voice="alloy", transport=httpx.MockTransport(handler)
+        )
+        await provider.synthesize("hello", voice="nova")
+
+    @pytest.mark.asyncio
+    async def test_unsupported_format_rejected_before_any_request(self):
+        def handler(request: httpx.Request) -> httpx.Response:
+            raise AssertionError("must not make a request for an unsupported format")
+
+        provider = OpenAICloudTTSProvider(
+            api_key="test-key", model="tts-1", default_voice="alloy", transport=httpx.MockTransport(handler)
+        )
+        with pytest.raises(GenerationProviderRequestError):
+            await provider.synthesize("hello", format="madeup")
+
+    @pytest.mark.asyncio
+    async def test_429_raises_quota_exceeded(self):
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(429, json={"error": {"message": "quota exceeded"}})
+
+        provider = OpenAICloudTTSProvider(
+            api_key="test-key", model="tts-1", default_voice="alloy", transport=httpx.MockTransport(handler)
+        )
+        with pytest.raises(GenerationProviderQuotaExceededError):
+            await provider.synthesize("hello")
+
+    @pytest.mark.asyncio
+    async def test_401_raises_auth_error(self):
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(401, json={"error": {"message": "invalid key"}})
+
+        provider = OpenAICloudTTSProvider(
+            api_key="bad-key", model="tts-1", default_voice="alloy", transport=httpx.MockTransport(handler)
+        )
+        with pytest.raises(GenerationProviderAuthError):
+            await provider.synthesize("hello")
+
+
+class TestOpenAICloudTranscriptionProvider:
+    @pytest.mark.asyncio
+    async def test_successful_transcription_parses_verbose_json(self):
+        def handler(request: httpx.Request) -> httpx.Response:
+            assert request.headers["authorization"] == "Bearer test-key"
+            return httpx.Response(
+                200,
+                json={
+                    "text": "hello world",
+                    "language": "english",
+                    "segments": [{"start": 0.0, "end": 1.2, "text": " hello world "}],
+                },
+            )
+
+        provider = OpenAICloudTranscriptionProvider(api_key="test-key", model="whisper-1", transport=httpx.MockTransport(handler))
+        result = await provider.transcribe(b"fake-audio-bytes")
+        assert result.text == "hello world"
+        assert result.language == "english"
+        assert len(result.segments) == 1
+        assert result.segments[0].text == "hello world"
+        assert result.segments[0].start_seconds == 0.0
+        assert result.segments[0].end_seconds == 1.2
+
+    @pytest.mark.asyncio
+    async def test_language_hint_is_sent_when_provided(self):
+        def handler(request: httpx.Request) -> httpx.Response:
+            body = request.content.decode()
+            assert 'name="language"' in body and "\r\nen\r\n" in body
+            return httpx.Response(200, json={"text": "hola", "language": "spanish", "segments": []})
+
+        provider = OpenAICloudTranscriptionProvider(api_key="test-key", model="whisper-1", transport=httpx.MockTransport(handler))
+        await provider.transcribe(b"fake-audio-bytes", language="en")
+
+    @pytest.mark.asyncio
+    async def test_429_raises_quota_exceeded(self):
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(429, json={"error": {"message": "quota exceeded"}})
+
+        provider = OpenAICloudTranscriptionProvider(api_key="test-key", model="whisper-1", transport=httpx.MockTransport(handler))
+        with pytest.raises(GenerationProviderQuotaExceededError):
+            await provider.transcribe(b"fake-audio-bytes")
+
+    @pytest.mark.asyncio
+    async def test_network_failure_raises_provider_unavailable(self):
+        def handler(request: httpx.Request) -> httpx.Response:
+            raise httpx.ConnectError("connection refused")
+
+        provider = OpenAICloudTranscriptionProvider(api_key="test-key", model="whisper-1", transport=httpx.MockTransport(handler))
+        with pytest.raises(GenerationProviderUnavailableError):
+            await provider.transcribe(b"fake-audio-bytes")
+
+
+class TestElevenLabsVoiceProvider:
+    @pytest.mark.asyncio
+    async def test_clone_voice_without_consent_raises_value_error_before_any_request(self):
+        def handler(request: httpx.Request) -> httpx.Response:
+            raise AssertionError("must not make a request without consent")
+
+        provider = ElevenLabsVoiceProvider(api_key="test-key", model="eleven_multilingual_v2", transport=httpx.MockTransport(handler))
+        with pytest.raises(ValueError):
+            await provider.clone_voice(b"fake-sample", consent_confirmed=False)
+
+    @pytest.mark.asyncio
+    async def test_successful_clone_returns_provider_ref(self):
+        def handler(request: httpx.Request) -> httpx.Response:
+            assert request.headers["xi-api-key"] == "test-key"
+            return httpx.Response(200, json={"voice_id": "voice-abc123"})
+
+        provider = ElevenLabsVoiceProvider(api_key="test-key", model="eleven_multilingual_v2", transport=httpx.MockTransport(handler))
+        cloned = await provider.clone_voice(b"fake-sample", consent_confirmed=True, name="My Voice")
+        assert cloned.provider_ref == "voice-abc123"
+
+    @pytest.mark.asyncio
+    async def test_clone_401_raises_auth_error(self):
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(401, json={"detail": {"message": "invalid key"}})
+
+        provider = ElevenLabsVoiceProvider(api_key="bad-key", model="eleven_multilingual_v2", transport=httpx.MockTransport(handler))
+        with pytest.raises(GenerationProviderAuthError):
+            await provider.clone_voice(b"fake-sample", consent_confirmed=True)
+
+    @pytest.mark.asyncio
+    async def test_successful_synthesis_returns_real_bytes(self):
+        def handler(request: httpx.Request) -> httpx.Response:
+            assert request.url.path == "/v1/text-to-speech/voice-abc123"
+            return httpx.Response(200, content=b"fake-mp3-bytes", headers={"content-type": "audio/mpeg"})
+
+        provider = ElevenLabsVoiceProvider(api_key="test-key", model="eleven_multilingual_v2", transport=httpx.MockTransport(handler))
+        result = await provider.synthesize_with_voice("hello", ClonedVoiceProfile(provider_ref="voice-abc123"))
+        assert result.data == b"fake-mp3-bytes"
+        assert result.format == "mp3"
+
+    @pytest.mark.asyncio
+    async def test_delete_voice_succeeds(self):
+        def handler(request: httpx.Request) -> httpx.Response:
+            assert request.method == "DELETE"
+            assert request.url.path == "/v1/voices/voice-abc123"
+            return httpx.Response(200, json={"status": "ok"})
+
+        provider = ElevenLabsVoiceProvider(api_key="test-key", model="eleven_multilingual_v2", transport=httpx.MockTransport(handler))
+        await provider.delete_voice(ClonedVoiceProfile(provider_ref="voice-abc123"))  # must not raise
+
+    @pytest.mark.asyncio
+    async def test_delete_voice_404_is_treated_as_already_gone_not_an_error(self):
+        """The vendor having already lost track of this voice is the same
+        end state as a successful delete from the caller's perspective —
+        must not raise."""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(404, json={"detail": "not found"})
+
+        provider = ElevenLabsVoiceProvider(api_key="test-key", model="eleven_multilingual_v2", transport=httpx.MockTransport(handler))
+        await provider.delete_voice(ClonedVoiceProfile(provider_ref="voice-abc123"))
+
+    @pytest.mark.asyncio
+    async def test_delete_voice_500_raises_provider_unavailable(self):
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(500, json={"detail": "internal error"})
+
+        provider = ElevenLabsVoiceProvider(api_key="test-key", model="eleven_multilingual_v2", transport=httpx.MockTransport(handler))
+        with pytest.raises(GenerationProviderUnavailableError):
+            await provider.delete_voice(ClonedVoiceProfile(provider_ref="voice-abc123"))
+
+
+class TestAudioSecretsNeverLeakInProviderErrors:
+    """Same discipline as TestSecretsNeverLeakInProviderErrors above,
+    applied to the three new audio-family providers — a real API key
+    must never appear in a raised error's text, whether the vendor sends
+    the key back in a response body or the failure is a raw connection
+    error."""
+
+    _REAL_LOOKING_KEY = "sk-real-secret-abcdef1234567890"
+
+    @pytest.mark.asyncio
+    async def test_openai_tts_401_never_contains_the_configured_key(self):
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(401, json={"error": {"message": "Invalid API key."}})
+
+        provider = OpenAICloudTTSProvider(
+            api_key=self._REAL_LOOKING_KEY, model="tts-1", default_voice="alloy", transport=httpx.MockTransport(handler)
+        )
+        with pytest.raises(GenerationProviderAuthError) as excinfo:
+            await provider.synthesize("hello")
+        assert self._REAL_LOOKING_KEY not in str(excinfo.value)
+
+    @pytest.mark.asyncio
+    async def test_openai_transcription_connect_error_never_contains_the_configured_key(self):
+        def handler(request: httpx.Request) -> httpx.Response:
+            raise httpx.ConnectError("connection refused")
+
+        provider = OpenAICloudTranscriptionProvider(
+            api_key=self._REAL_LOOKING_KEY, model="whisper-1", transport=httpx.MockTransport(handler)
+        )
+        with pytest.raises(GenerationProviderUnavailableError) as excinfo:
+            await provider.transcribe(b"fake-audio")
+        assert self._REAL_LOOKING_KEY not in str(excinfo.value)
+
+    @pytest.mark.asyncio
+    async def test_elevenlabs_connect_error_never_contains_the_configured_key(self):
+        """The highest-risk path for this vendor: xi-api-key is sent as a
+        header (not a URL param, unlike Gemini), but this still confirms
+        the network-failure error path is clean end to end."""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            raise httpx.ConnectError("connection refused")
+
+        provider = ElevenLabsVoiceProvider(
+            api_key=self._REAL_LOOKING_KEY, model="eleven_multilingual_v2", transport=httpx.MockTransport(handler)
+        )
+        with pytest.raises(GenerationProviderUnavailableError) as excinfo:
+            await provider.clone_voice(b"fake-sample", consent_confirmed=True)
+        assert self._REAL_LOOKING_KEY not in str(excinfo.value)

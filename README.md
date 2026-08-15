@@ -1,6 +1,6 @@
-# AI Agent Platform
+# Shadow AI
 
-A full-stack AI Agent + Creative Studio + Obsidian Knowledge Intelligence
+A full-stack AI agent + Creative Studio + Obsidian Knowledge Intelligence
 platform. This repository is being built in phases (see **Roadmap**
 below); this README always reflects what's actually implemented, not the
 full end-state vision.
@@ -346,19 +346,27 @@ This is the same provider-abstraction pattern as Claude and email:
 API-backed provider could be swapped in via `OBSIDIAN_PROVIDER` without
 touching call sites.
 
-### Configuring local generation capabilities (audio/transcription/image/video)
+### Configuring local generation capabilities (audio/transcription/image/video/voice)
 
 Check what's actually available on your machine at
 `GET /api/system/capabilities` or the **System Status** page — it's real
 detection, never a hard-coded "working" state:
 
-- **Audio (text-to-speech)** — install `espeak-ng` (`apt install
-  espeak-ng` on Linux, `brew install espeak-ng` on macOS) and it works
-  immediately with `TTS_PROVIDER=local`, no restart-required config
-  beyond having the binary on `PATH`.
-- **Transcription** — install a local Whisper backend
-  (`pip install faster-whisper` is recommended; no ffmpeg required) with
-  `TRANSCRIPTION_PROVIDER=local`.
+- **Audio (text-to-speech)** — `TTS_PROVIDER` defaults to `local`:
+  install `espeak-ng` (`apt install espeak-ng` on Linux, `brew install
+  espeak-ng` on macOS) and it works immediately, no restart-required
+  config beyond having the binary on `PATH`. Set `TTS_PROVIDER=cloud`
+  for the real `OpenAICloudTTSProvider` (`/v1/audio/speech`) instead —
+  it reuses `OPENAI_API_KEY` (the same credential as image generation
+  below, no separate key needed); see `OPENAI_TTS_MODEL`/
+  `OPENAI_TTS_VOICE` in `.env.example`.
+- **Transcription** — `TRANSCRIPTION_PROVIDER` defaults to `local`:
+  install a local Whisper backend (`pip install faster-whisper` is
+  recommended; no ffmpeg required). Set `TRANSCRIPTION_PROVIDER=cloud`
+  for the real `OpenAICloudTranscriptionProvider` (`/v1/audio/
+  transcriptions`, Whisper) — reuses `OPENAI_API_KEY`; see
+  `OPENAI_TRANSCRIPTION_MODEL` in `.env.example`. Runs through the
+  `GenerationJob` queue: `POST /api/generation/audio/transcribe`.
 - **Image / Video — API-based only, no local/GPU option.**
   `IMAGE_PROVIDER`/`VIDEO_PROVIDER` **default to `cloud`**, which uses the
   real `OpenAIImageProvider` (DALL·E/gpt-image)/`GeminiVideoProvider`
@@ -375,10 +383,20 @@ detection, never a hard-coded "working" state:
   `VIDEO_PROVIDER=local`, which there is no reason to do. See "AI Media +
   Document Generation" above and `OPENAI_IMAGE_MODEL`/`GEMINI_VIDEO_MODEL`
   in `.env.example` for the model names.
-- **Voice cloning** — no bundled local backend and no cloud provider
-  implemented yet; `VOICE_PROVIDER=cloud` reports honest "unavailable"
-  until a real vendor integration lands (architecture point — see
-  `app/integrations/generation/voice/cloud_provider.py`).
+- **Voice cloning** — `VOICE_PROVIDER` defaults to `local`, which
+  honestly reports "unavailable" (cloning needs a real vendor, not a
+  local model — no GPU is ever required by this application). Set
+  `VOICE_PROVIDER=cloud` with `ELEVENLABS_API_KEY` set for the real
+  `ElevenLabsVoiceProvider` — a separate credential from `OPENAI_API_KEY`,
+  since OpenAI has no cloning endpoint; see `ELEVENLABS_VOICE_MODEL` in
+  `.env.example`. Cloning itself is synchronous (`POST /api/generation/
+  audio/voices`, matching the Word/PPT/Excel pattern — a real clone call
+  completes in seconds, not minutes) and creates a per-user `VoiceProfile`
+  row; the vendor's own voice ID is never exposed to the frontend, only
+  this app's own row ID (`GET /api/generation/audio/voices` to list,
+  `DELETE .../voices/{id}` to remove), which can then be passed as
+  `voice_profile_id` on `POST /api/jobs/audio` to narrate with that
+  cloned voice instead of a built-in TTS voice.
 
 ### Final polish (Phase 11): performance, accessibility, responsive
 
@@ -816,7 +834,7 @@ This repo follows the phased plan from the product spec:
 4. ✅ **AI Agent** — AI provider architecture (Anthropic/Gemini, no local-LLM option), orchestrator, chat, streaming, 7 modes (tool-calling architecture still to come)
 5. ✅ **Obsidian** — per-user vault (never a shared/global one), search/read/create/update/append/move/delete/get_metadata, connection status, Knowledge/Research mode grounding (MCP/REST bridge to a live Obsidian.app instance is a possible future provider — the current one operates directly on vault files, which is what a live Obsidian instance is backed by anyway)
 6. ✅ **Knowledge Intelligence** — gap/duplicate/outdated/broken-link/orphan detection, health score, knowledge graph, AI-backed gap analysis, knowledge-update history, auto-update policy setting (Auto/Approval/Smart Auto — saved now, ready for the future automatic-apply capability)
-7. 🟡 **Creative tools** — image/audio/video/document/design generation. **Document generation is done**: AI-drafted content rendered to real Markdown/.docx/.pdf via `StorageProvider`, gated honestly by AI provider configuration. **Structured Word/PowerPoint/Excel generation is done**: `POST /api/generation/document/{word,ppt,excel}` render real .docx/.pptx/.xlsx files from caller-supplied structured content (headings/paragraphs/lists/tables; slides/bullets/notes; sheets/rows/formulas/charts) via `python-docx`/`python-pptx`/`openpyxl` — no AI provider required. **Local audio (TTS) generation is done**: real `espeak-ng`-backed synthesis through the job queue (`POST /api/jobs/audio`). **Image (OpenAI) and video (Gemini) generation are done, API-based only (no local/GPU option)**: `OpenAIImageProvider` (`/v1/images/generations`) and `GeminiVideoProvider` (Veo `:predictLongRunning` + poll + download) are real REST-based providers, selected by default (`IMAGE_PROVIDER`/`VIDEO_PROVIDER` default to `cloud`) — setting `OPENAI_API_KEY` (image) and `GEMINI_API_KEY`/`GOOGLE_API_KEY` (video) is the only configuration required, two independent credentials for two independent vendors; both run through the `GenerationJob` queue (`POST /api/generation/image`, `POST /api/generation/video`) with real status polling and download. Full provider architecture (interface + local/cloud factory + honest capability detection) exists for all five generation categories (Audio/Transcription/Image/Video/Voice) plus Deployment — Transcription/Voice cloning remain ⬜ for actual generation (each needs a real backend/GPU/model or a real external vendor integration), but report exactly why via `GET /api/system/capabilities` rather than pretending to work. Website/3D Website/Poster/Logo/Graphic Design generation itself remain ⬜.
+7. 🟡 **Creative tools** — image/audio/video/document/design generation. **Document generation is done**: AI-drafted content rendered to real Markdown/.docx/.pdf via `StorageProvider`, gated honestly by AI provider configuration. **Structured Word/PowerPoint/Excel generation is done**: `POST /api/generation/document/{word,ppt,excel}` render real .docx/.pptx/.xlsx files from caller-supplied structured content (headings/paragraphs/lists/tables; slides/bullets/notes; sheets/rows/formulas/charts) via `python-docx`/`python-pptx`/`openpyxl` — no AI provider required. **Audio generation, transcription, and voice cloning are done, both local and cloud**: local TTS uses `espeak-ng` (`POST /api/jobs/audio`, `TTS_PROVIDER=local`, the default); a real cloud path exists for all three via `TTS_PROVIDER=cloud`/`TRANSCRIPTION_PROVIDER=cloud`/`VOICE_PROVIDER=cloud` — audio (`/v1/audio/speech`) and transcription (`/v1/audio/transcriptions`, Whisper) reuse `OPENAI_API_KEY` (no separate credential), voice cloning uses ElevenLabs via `ELEVENLABS_API_KEY` (a separate credential — OpenAI has no cloning endpoint). Transcription runs through the `GenerationJob` queue (`POST /api/generation/audio/transcribe`); voice cloning is synchronous (`POST /api/generation/audio/voices`, matching the Word/PPT/Excel pattern below, since a real clone call completes in seconds) and persists a per-user `VoiceProfile` row — the vendor's own voice ID is never exposed to the frontend, only this app's own row ID, which can then be passed as `voice_profile_id` to `POST /api/jobs/audio` to narrate with a cloned voice. **Image (OpenAI) and video (Gemini) generation are done, API-based only (no local/GPU option)**: `OpenAIImageProvider` (`/v1/images/generations`) and `GeminiVideoProvider` (Veo `:predictLongRunning` + poll + download) are real REST-based providers, selected by default (`IMAGE_PROVIDER`/`VIDEO_PROVIDER` default to `cloud`) — setting `OPENAI_API_KEY` (image) and `GEMINI_API_KEY`/`GOOGLE_API_KEY` (video) is the only configuration required, two independent credentials for two independent vendors; both run through the `GenerationJob` queue (`POST /api/generation/image`, `POST /api/generation/video`) with real status polling and download. Full provider architecture (interface + local/cloud factory + honest capability detection) exists for all five generation categories (Audio/Transcription/Image/Video/Voice) plus Deployment. Website/3D Website/Poster/Logo/Graphic Design generation itself remain ⬜.
 8. 🟡 **Developer Studio** — website/3D website generation, live preview, deployment. **Deployment architecture is done**: `DeploymentProvider` (`LocalDeploymentProvider` — real zip packaging, no credentials — plus Netlify/Vercel architecture points) is ready for website generation to use once built; website generation itself remains ⬜.
 9. 🟡 **Integration** — projects ↔ knowledge ↔ history ↔ files ↔ AI context ↔ activity log. **Production-readiness architecture** (landed alongside Phase 7): local/production runtime-mode switching (`AI_RUNTIME_MODE`), a real generation job queue (`GenerationJob` + `JobQueue` + `InProcessJobQueue`, Celery/RQ-swappable, and Image/Video generation already run through it), the Capability API (`GET /api/system/capabilities`) and Health API (`GET /health`, `GET /api/system/providers/health`), a System Status frontend page + Settings tabs, and technical rate-limiting/concurrency/upload-size protection (no user-visible credit system). **Cross-module wiring is done**: every artifact type (`HistoryEntry`, `Document`, `GenerationJob`, `Conversation`, `KnowledgeAnalysis`) already carried an optional `project_id` at the database/API level, but the project workspace UI only exposed History — its Chat/Knowledge/Files tabs were stale placeholders. They're now real: **Files** lists the project's documents and generated media with download links (`GET /documents?project_id=`, `GET /jobs?project_id=`); **Knowledge** lists the project's gap analyses with a deep link to run a new one pre-scoped to the project (`GET /knowledge/gaps?project_id=`, `knowledge-gaps.html?project_id=`); **Chat** lists the project's conversations with deep links into `agent.html` (`?conversation=` opens one directly, `?project_id=` pre-scopes the "new chat" modal to Project mode). **AI context is real, not just name/description**: a Project-mode (or any project-scoped) conversation's system prompt now includes the project's most recent `HistoryEntry` activity (documents, generated media, knowledge updates — chat excluded) via `_build_project_activity_context` in `app/agents/orchestrator.py`, so Claude is aware of what's actually happened in the project without the user re-explaining it. "Activity log" was never a separate concept from History — that item is resolved by definition. Remaining integration work: a persistent-broker `JobQueue` implementation for true multi-worker production scaling, and a Documents Studio project filter (the backend already supports `?project_id=` on `GET /documents`; the standalone Documents page doesn't expose it yet — only the project workspace's Files tab does).
 10. ✅ **Testing** — expanded integration/E2E/security test coverage: CSRF-rejection coverage for every previously-untested state-changing endpoint, real exercise of every rate-limit bucket, session-cookie attribute/expiry/production-validator coverage, cross-user ownership isolation for documents/jobs/media/Obsidian write ops, secrets-never-leak coverage generalized across every provider credential (including the error-message path), and a true multi-module signup-to-chat E2E journey test. Found and fixed 2 real bugs along the way (`DELETE /api/documents/{id}` was missing CSRF protection; an oversized video reference image crashed to a raw 500 instead of a clean 413).

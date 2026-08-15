@@ -27,7 +27,7 @@ logger = logging.getLogger("app")
 
 app = FastAPI(
     title=settings.app_name,
-    description="AI Agent + Creative Studio + Obsidian Knowledge Intelligence Platform API",
+    description="Shadow AI — Creative Studio + Obsidian Knowledge Intelligence Platform API",
     version="0.1.0",
     docs_url="/api/docs" if not settings.is_production else None,
     redoc_url="/api/redoc" if not settings.is_production else None,

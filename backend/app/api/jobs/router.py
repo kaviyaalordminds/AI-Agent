@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.database.session import get_db
 from app.integrations.generation.audio.factory import get_audio_provider
+from app.integrations.generation.voice.factory import get_voice_provider
 from app.jobs.service import (
     build_download_response,
     create_and_submit_job,
@@ -15,6 +16,7 @@ from app.jobs.service import (
 )
 from app.models.generation_job import GenerationJob, JobStatus, JobType
 from app.models.user import User
+from app.models.voice_profile import VoiceProfile
 from app.schemas.job import CreateAudioJobRequest, JobOut
 from app.security.rate_limit import enforce_rate_limit
 from app.security.sessions import get_current_user, require_csrf
@@ -60,20 +62,27 @@ async def create_audio_job(
 
     project = resolve_owned_project(db, user, payload.project_id)
 
-    return create_and_submit_job(
-        db,
-        user,
-        project,
-        JobType.audio,
-        get_audio_provider().capability().provider,
-        {
-            "text": payload.text,
-            "voice": payload.voice,
-            "language": payload.language,
-            "speed": payload.speed,
-            "format": payload.format,
-        },
-    )
+    input_metadata: dict = {
+        "text": payload.text,
+        "voice": payload.voice,
+        "language": payload.language,
+        "speed": payload.speed,
+        "format": payload.format,
+    }
+    if payload.voice_profile_id is not None:
+        profile = (
+            db.query(VoiceProfile)
+            .filter(VoiceProfile.id == payload.voice_profile_id, VoiceProfile.user_id == user.id)
+            .first()
+        )
+        if profile is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Voice profile not found.")
+        input_metadata["voice_profile_id"] = str(profile.id)
+        provider_name = get_voice_provider().capability().provider
+    else:
+        provider_name = get_audio_provider().capability().provider
+
+    return create_and_submit_job(db, user, project, JobType.audio, provider_name, input_metadata)
 
 
 @router.post("/{job_id}/cancel", response_model=JobOut)

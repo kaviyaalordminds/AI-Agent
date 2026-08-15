@@ -17,7 +17,7 @@ class LocalVoiceProvider(VoiceProvider):
     def capability(self) -> CapabilityStatus:
         return CapabilityStatus(available=False, provider="local", mode="local", reason=_REASON)
 
-    async def clone_voice(self, sample_audio: bytes, consent_confirmed: bool) -> ClonedVoiceProfile:
+    async def clone_voice(self, sample_audio: bytes, consent_confirmed: bool, name: str = "Cloned voice") -> ClonedVoiceProfile:
         if not consent_confirmed:
             raise ValueError(
                 "Voice cloning requires explicit confirmation that you have "
@@ -26,4 +26,7 @@ class LocalVoiceProvider(VoiceProvider):
         raise GenerationProviderNotConfiguredError(_REASON)
 
     async def synthesize_with_voice(self, text: str, profile: ClonedVoiceProfile) -> VoiceSynthesisResult:
+        raise GenerationProviderNotConfiguredError(_REASON)
+
+    async def delete_voice(self, profile: ClonedVoiceProfile) -> None:
         raise GenerationProviderNotConfiguredError(_REASON)

@@ -22,9 +22,9 @@ DEFAULT_FOLDERS = [
     "09-AI-Memory",
 ]
 
-_WELCOME_NOTE = """# Welcome to your AI Agent Platform vault
+_WELCOME_NOTE = """# Welcome to your Shadow AI vault
 
-This vault is your knowledge layer. The AI Agent reads from and writes to
+This vault is your knowledge layer. Shadow AI reads from and writes to
 it — notes here, not the application database, are what makes the agent
 "know" your projects and domain.
 
@@ -36,13 +36,12 @@ it — notes here, not the application database, are what makes the agent
 - **03-Resources** — links, references, source material
 - **04-Tasks** — task notes
 - **05-Ideas** — rough notes and drafts
-- **06-Generated** — content the AI Agent generates on your behalf
+- **06-Generated** — content Shadow AI generates on your behalf
 - **07-Research** — research notes (used by Research mode once knowledge analysis ships)
 - **08-Reports** — generated reports
 - **09-AI-Memory** — long-term memory the agent keeps about you and your work
 
-Use `[[wiki links]]` to connect notes and `#tags` to categorize them — the
-AI Agent parses both.
+Use `[[wiki links]]` to connect notes and `#tags` to categorize them — Shadow AI parses both.
 """
 
 _STOPWORDS = {

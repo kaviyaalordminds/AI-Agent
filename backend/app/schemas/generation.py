@@ -34,6 +34,25 @@ class CreateVideoJobRequest(BaseModel):
         return value
 
 
+class CreateTranscriptionJobRequest(BaseModel):
+    audio_base64: str = Field(
+        min_length=1,
+        max_length=40_000_000,  # ~30MB decoded; storage.write() enforces the real MAX_UPLOAD_FILE_SIZE_MB limit
+        description="Base64-encoded audio file to transcribe.",
+    )
+    language: str | None = Field(default=None, max_length=10)
+    project_id: uuid.UUID | None = None
+
+    @field_validator("audio_base64")
+    @classmethod
+    def _validate_base64(cls, value: str) -> str:
+        try:
+            base64.b64decode(value, validate=True)
+        except Exception as exc:
+            raise ValueError("audio_base64 must be valid base64-encoded audio data.") from exc
+        return value
+
+
 # --- Structured document generation (Word / PowerPoint / Excel) ---
 # These formats require no AI provider: the caller supplies fully
 # structured content and a local library (python-docx/python-pptx/

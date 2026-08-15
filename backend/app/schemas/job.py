@@ -13,6 +13,9 @@ class CreateAudioJobRequest(BaseModel):
     speed: float = Field(default=1.0, ge=0.5, le=2.0)
     format: str = "wav"
     project_id: uuid.UUID | None = None
+    voice_profile_id: uuid.UUID | None = Field(
+        default=None, description="Use a previously cloned voice (see /api/generation/audio/voices) instead of a built-in TTS voice."
+    )
 
 
 class JobOut(BaseModel):

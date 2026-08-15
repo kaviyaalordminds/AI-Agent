@@ -6,7 +6,7 @@
 
 const NAV_STRUCTURE = [
   {
-    label: "AI Agent",
+    label: "Shadow AI",
     items: [
       { key: "dashboard", label: "Home", icon: "bi-house", href: "dashboard.html", enabled: true },
       { key: "agent", label: "AI Chat", icon: "bi-chat-dots", href: "agent.html", enabled: true },
@@ -16,7 +16,9 @@ const NAV_STRUCTURE = [
     label: "Create",
     items: [
       { key: "image", label: "Image", icon: "bi-image", href: "image-generation.html", enabled: true },
-      { key: "audio", label: "Audio", icon: "bi-mic", href: "#", enabled: false },
+      { key: "audio-generation", label: "Audio", icon: "bi-mic", href: "audio-generation.html", enabled: true },
+      { key: "audio-transcription", label: "Audio Transcription", icon: "bi-file-earmark-text", href: "audio-transcription.html", enabled: true },
+      { key: "audio-cloning", label: "Audio Cloning", icon: "bi-person-vcard", href: "audio-cloning.html", enabled: true },
       { key: "video", label: "Video", icon: "bi-camera-reels", href: "video-generation.html", enabled: true },
       { key: "documents", label: "Documents", icon: "bi-file-earmark-text", href: "documents.html", enabled: true },
       { key: "word", label: "Word Docs", icon: "bi-file-earmark-word", href: "word-generation.html", enabled: true },
@@ -84,7 +86,7 @@ function renderSidebarHtml(activeKey) {
   return `
     <div class="sidebar-brand">
       <span class="glyph"><i class="bi bi-stars"></i></span>
-      <span class="nav-link-label">AI Agent</span>
+      <span class="nav-link-label">Shadow AI</span>
     </div>
     <nav>${groups}</nav>
     <div class="sidebar-footer">

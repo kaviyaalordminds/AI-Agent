@@ -15,39 +15,60 @@ import uuid
 from app.database.base import utcnow
 from app.database.session import SessionLocal
 from app.integrations.generation.audio.factory import get_audio_provider
-from app.integrations.generation.errors import GenerationProviderError
+from app.integrations.generation.errors import GenerationProviderError, GenerationProviderNotConfiguredError
 from app.integrations.generation.image.factory import get_image_provider
 from app.integrations.generation.transcription.factory import get_transcription_provider
 from app.integrations.generation.video.factory import get_video_provider
+from app.integrations.generation.voice.base import ClonedVoiceProfile
+from app.integrations.generation.voice.factory import get_voice_provider
 from app.integrations.storage.errors import StorageError
 from app.integrations.storage.factory import get_storage_provider
 from app.models.generation_job import GenerationJob, JobStatus, JobType
 from app.models.history import HistoryEntry, HistoryEntryStatus, HistoryEntryType
+from app.models.voice_profile import VoiceProfile
 
 logger = logging.getLogger("app.jobs")
 
 _HISTORY_TYPE_FOR_JOB_TYPE = {
     JobType.audio: HistoryEntryType.audio,
+    JobType.transcription: HistoryEntryType.audio,
     JobType.image: HistoryEntryType.image,
     JobType.video: HistoryEntryType.video,
 }
 
 
-async def _run_audio_job(job: GenerationJob, storage) -> dict:
-    provider = get_audio_provider()
+async def _run_audio_job(job: GenerationJob, storage, db) -> dict:
     meta = job.input_metadata
-    result = await provider.synthesize(
-        text=meta["text"],
-        voice=meta.get("voice"),
-        language=meta.get("language"),
-        speed=meta.get("speed", 1.0),
-        format=meta.get("format", "wav"),
-    )
+    voice_profile_id = meta.get("voice_profile_id")
+
+    if voice_profile_id:
+        # Re-checks ownership here (not just at job-creation time in the
+        # router) as defense in depth — this runs out of request scope,
+        # so it never trusts that the caller who created the job is the
+        # same one this row still belongs to.
+        profile = (
+            db.query(VoiceProfile)
+            .filter(VoiceProfile.id == voice_profile_id, VoiceProfile.user_id == job.user_id)
+            .first()
+        )
+        if profile is None:
+            raise GenerationProviderNotConfiguredError("The selected cloned voice no longer exists.")
+        result = await get_voice_provider().synthesize_with_voice(
+            text=meta["text"], profile=ClonedVoiceProfile(provider_ref=profile.provider_ref)
+        )
+    else:
+        result = await get_audio_provider().synthesize(
+            text=meta["text"],
+            voice=meta.get("voice"),
+            language=meta.get("language"),
+            speed=meta.get("speed", 1.0),
+            format=meta.get("format", "wav"),
+        )
     stored = storage.write("generated_audio", str(job.user_id), f"{job.id}.{result.format}", result.data)
     return {"storage_ref": stored.ref, "content_type": result.content_type, "size_bytes": stored.size_bytes}
 
 
-async def _run_transcription_job(job: GenerationJob, storage) -> dict:
+async def _run_transcription_job(job: GenerationJob, storage, db) -> dict:
     provider = get_transcription_provider()
     audio_bytes = storage.read(job.input_metadata["audio_ref"])
     result = await provider.transcribe(audio_bytes, language=job.input_metadata.get("language"))
@@ -60,7 +81,7 @@ async def _run_transcription_job(job: GenerationJob, storage) -> dict:
     }
 
 
-async def _run_image_job(job: GenerationJob, storage) -> dict:
+async def _run_image_job(job: GenerationJob, storage, db) -> dict:
     provider = get_image_provider()
     cap = provider.capability()
     meta = job.input_metadata
@@ -74,7 +95,7 @@ async def _run_image_job(job: GenerationJob, storage) -> dict:
     return {"storage_ref": stored.ref, "content_type": result.content_type, "size_bytes": stored.size_bytes}
 
 
-async def _run_video_job(job: GenerationJob, storage) -> dict:
+async def _run_video_job(job: GenerationJob, storage, db) -> dict:
     provider = get_video_provider()
     cap = provider.capability()
     meta = job.input_metadata
@@ -126,7 +147,7 @@ async def run_job(job_id: uuid.UUID) -> None:
 
         storage = get_storage_provider()
         try:
-            output = await runner(job, storage)
+            output = await runner(job, storage, db)
         except (GenerationProviderError, StorageError) as exc:
             logger.warning("job %s (%s) failed: %s", job_id, job.type.value, exc)
             job.status = JobStatus.failed
