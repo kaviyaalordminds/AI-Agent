@@ -100,7 +100,13 @@ class Settings(BaseSettings):
     # from text; GEMINI_API_KEY falls back to GOOGLE_API_KEY (see
     # resolved_gemini_api_key below) so setting only one is also fine.
     gemini_api_key: str | None = None
-    gemini_video_model: str = "veo-2.0-generate-001"
+    # veo-2.0-generate-001 was retired / is no longer served by the Gemini
+    # API's predictLongRunning endpoint (returns 404 "not found ... or is
+    # not supported for predictLongRunning") — veo-3.1-generate-preview is
+    # the currently supported model as of this writing. Override via
+    # GEMINI_VIDEO_MODEL if Google ships a newer one before this default
+    # is updated again.
+    gemini_video_model: str = "veo-3.1-generate-preview"
 
     # --- OpenAI image generation ---
     # Provider name and credential are always separate values — OPENAI_API_KEY
