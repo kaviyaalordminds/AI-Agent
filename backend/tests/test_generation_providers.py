@@ -42,19 +42,21 @@ class TestAudioProvider:
 
 
 class TestUnavailableLocalProvidersFailHonestly:
-    """Image/video default to the real, API-based Gemini provider (no
-    GPU/local model involved) but this test environment has no
-    GEMINI_API_KEY configured; voice has no local backend in any CI/
-    sandbox environment. These assert the honest-unavailable contract,
-    not that they mysteriously started working."""
+    """Image/video default to real, API-based providers (no GPU/local
+    model involved) — image via OpenAI, video via Gemini — but this test
+    environment has no OPENAI_API_KEY/GEMINI_API_KEY configured; voice has
+    no local backend in any CI/sandbox environment. These assert the
+    honest-unavailable contract, not that they mysteriously started
+    working."""
 
     @pytest.mark.asyncio
     async def test_image_provider_honestly_unavailable(self):
         provider = get_image_provider()
         cap = provider.capability()
         assert cap.available is False
+        assert cap.provider == "openai"
         assert "not configured" in cap.reason.lower()
-        assert "gemini_api_key" in cap.reason.lower()
+        assert "openai_api_key" in cap.reason.lower()
         with pytest.raises(GenerationProviderNotConfiguredError):
             await provider.generate("a red apple")
 

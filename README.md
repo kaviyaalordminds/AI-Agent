@@ -188,13 +188,13 @@ Status** page (Settings → System Status, or the sidebar's own entry).
   provider families establish the pattern the remaining MCP/website-
   generation integrations will follow — application code never talks to
   a vendor SDK, external API, or the filesystem directly.
-- **AI Media + Document Generation** (Gemini Image/Video, Word/PPT/Excel):
-  five new generation capabilities, each reusing existing architecture
-  rather than duplicating it.
-  - **Image generation**: `GeminiImageProvider` calls the Gemini API's
-    Imagen models directly over `httpx` (no new SDK dependency — avoids
-    the `google-genai` SDK's pydantic/httpx version conflicts identified
-    earlier). `POST /api/generation/image` creates a `GenerationJob`,
+- **AI Media + Document Generation** (OpenAI Image, Gemini Video,
+  Word/PPT/Excel): five new generation capabilities, each reusing
+  existing architecture rather than duplicating it.
+  - **Image generation**: `OpenAIImageProvider` calls the OpenAI Images
+    API (`/v1/images/generations`) directly over `httpx` (no new SDK
+    dependency, same pattern as the video provider below).
+    `POST /api/generation/image` creates a `GenerationJob`,
     `GET /api/generation/image/{job_id}` polls status,
     `GET /api/generation/image/{job_id}/download` streams the result.
   - **Video generation**: `GeminiVideoProvider` drives the Gemini API's
@@ -225,10 +225,11 @@ Status** page (Settings → System Status, or the sidebar's own entry).
     status) and can optionally be associated with a project — exactly
     like every other generation path in this app. All nine endpoints
     require an authenticated session and CSRF on state-changing calls;
-    the Gemini API key is read only from backend environment variables
-    (`GEMINI_API_KEY`, falling back to `GOOGLE_API_KEY`) and is never
-    sent to or reachable from the frontend — the frontend only ever
-    calls this backend, never the Gemini API directly.
+    vendor API keys are read only from backend environment variables
+    (`OPENAI_API_KEY` for image, `GEMINI_API_KEY`/`GOOGLE_API_KEY` for
+    video) and are never sent to or reachable from the frontend — the
+    frontend only ever calls this backend, never OpenAI or Gemini
+    directly.
   - **Frontend**: five new pages (`image-generation.html`,
     `video-generation.html`, `word-generation.html`, `ppt-generation.html`,
     `excel-generation.html`) reusing the existing design system (`surface`,
@@ -341,18 +342,20 @@ detection, never a hard-coded "working" state:
   `TRANSCRIPTION_PROVIDER=local`.
 - **Image / Video — API-based only, no local/GPU option.**
   `IMAGE_PROVIDER`/`VIDEO_PROVIDER` **default to `cloud`**, which uses the
-  real `GeminiImageProvider` (Imagen)/`GeminiVideoProvider` (Veo) — set
-  `GEMINI_API_KEY` (or `GOOGLE_API_KEY`) and generation works immediately,
-  no other configuration needed. Without a key, both honestly report "not
-  configured" (never a fabricated result, never a crash). A `local` value
-  also exists for architectural symmetry with the other provider
-  families, but it never attempts to download or run a model — it always
-  reports "unavailable" (no GPU/torch/diffusers is ever installed by this
-  application) and exists only if you explicitly set
-  `IMAGE_PROVIDER=local`/`VIDEO_PROVIDER=local`, which there is no reason
-  to do. See "AI Media + Document Generation" above and
-  `GEMINI_IMAGE_MODEL`/`GEMINI_VIDEO_MODEL` in `.env.example` for the
-  model names.
+  real `OpenAIImageProvider` (DALL·E/gpt-image)/`GeminiVideoProvider`
+  (Veo) — set `OPENAI_API_KEY` (image) and `GEMINI_API_KEY` or
+  `GOOGLE_API_KEY` (video) and generation works immediately, no other
+  configuration needed. These are two independent credentials for two
+  independent vendors — chat/reasoning (Anthropic or Gemini) is unrelated
+  to either. Without a key, both honestly report "not configured" (never
+  a fabricated result, never a crash). A `local` value also exists for
+  architectural symmetry with the other provider families, but it never
+  attempts to download or run a model — it always reports "unavailable"
+  (no GPU/torch/diffusers is ever installed by this application) and
+  exists only if you explicitly set `IMAGE_PROVIDER=local`/
+  `VIDEO_PROVIDER=local`, which there is no reason to do. See "AI Media +
+  Document Generation" above and `OPENAI_IMAGE_MODEL`/`GEMINI_VIDEO_MODEL`
+  in `.env.example` for the model names.
 - **Voice cloning** — no bundled local backend and no cloud provider
   implemented yet; `VOICE_PROVIDER=cloud` reports honest "unavailable"
   until a real vendor integration lands (architecture point — see
@@ -722,7 +725,7 @@ This repo follows the phased plan from the product spec:
 4. ✅ **AI Agent** — AI provider architecture (Anthropic/Gemini, no local-LLM option), orchestrator, chat, streaming, 7 modes (tool-calling architecture still to come)
 5. ✅ **Obsidian** — per-user vault (never a shared/global one), search/read/create/update/append/move/delete/get_metadata, connection status, Knowledge/Research mode grounding (MCP/REST bridge to a live Obsidian.app instance is a possible future provider — the current one operates directly on vault files, which is what a live Obsidian instance is backed by anyway)
 6. ✅ **Knowledge Intelligence** — gap/duplicate/outdated/broken-link/orphan detection, health score, knowledge graph, AI-backed gap analysis, knowledge-update history, auto-update policy setting (Auto/Approval/Smart Auto — saved now, ready for the future automatic-apply capability)
-7. 🟡 **Creative tools** — image/audio/video/document/design generation. **Document generation is done**: AI-drafted content rendered to real Markdown/.docx/.pdf via `StorageProvider`, gated honestly by AI provider configuration. **Structured Word/PowerPoint/Excel generation is done**: `POST /api/generation/document/{word,ppt,excel}` render real .docx/.pptx/.xlsx files from caller-supplied structured content (headings/paragraphs/lists/tables; slides/bullets/notes; sheets/rows/formulas/charts) via `python-docx`/`python-pptx`/`openpyxl` — no AI provider required. **Local audio (TTS) generation is done**: real `espeak-ng`-backed synthesis through the job queue (`POST /api/jobs/audio`). **Image and video generation via Gemini are done, API-based only (no local/GPU option)**: `GeminiImageProvider` (Imagen `:predict`) and `GeminiVideoProvider` (Veo `:predictLongRunning` + poll + download) are real REST-based providers, selected by default (`IMAGE_PROVIDER`/`VIDEO_PROVIDER` default to `cloud`) — setting `GEMINI_API_KEY`/`GOOGLE_API_KEY` is the only configuration required; both run through the `GenerationJob` queue (`POST /api/generation/image`, `POST /api/generation/video`) with real status polling and download. Full provider architecture (interface + local/cloud factory + honest capability detection) exists for all five generation categories (Audio/Transcription/Image/Video/Voice) plus Deployment — Transcription/Voice cloning remain ⬜ for actual generation (each needs a real backend/GPU/model or a real external vendor integration), but report exactly why via `GET /api/system/capabilities` rather than pretending to work. Website/3D Website/Poster/Logo/Graphic Design generation itself remain ⬜.
+7. 🟡 **Creative tools** — image/audio/video/document/design generation. **Document generation is done**: AI-drafted content rendered to real Markdown/.docx/.pdf via `StorageProvider`, gated honestly by AI provider configuration. **Structured Word/PowerPoint/Excel generation is done**: `POST /api/generation/document/{word,ppt,excel}` render real .docx/.pptx/.xlsx files from caller-supplied structured content (headings/paragraphs/lists/tables; slides/bullets/notes; sheets/rows/formulas/charts) via `python-docx`/`python-pptx`/`openpyxl` — no AI provider required. **Local audio (TTS) generation is done**: real `espeak-ng`-backed synthesis through the job queue (`POST /api/jobs/audio`). **Image (OpenAI) and video (Gemini) generation are done, API-based only (no local/GPU option)**: `OpenAIImageProvider` (`/v1/images/generations`) and `GeminiVideoProvider` (Veo `:predictLongRunning` + poll + download) are real REST-based providers, selected by default (`IMAGE_PROVIDER`/`VIDEO_PROVIDER` default to `cloud`) — setting `OPENAI_API_KEY` (image) and `GEMINI_API_KEY`/`GOOGLE_API_KEY` (video) is the only configuration required, two independent credentials for two independent vendors; both run through the `GenerationJob` queue (`POST /api/generation/image`, `POST /api/generation/video`) with real status polling and download. Full provider architecture (interface + local/cloud factory + honest capability detection) exists for all five generation categories (Audio/Transcription/Image/Video/Voice) plus Deployment — Transcription/Voice cloning remain ⬜ for actual generation (each needs a real backend/GPU/model or a real external vendor integration), but report exactly why via `GET /api/system/capabilities` rather than pretending to work. Website/3D Website/Poster/Logo/Graphic Design generation itself remain ⬜.
 8. 🟡 **Developer Studio** — website/3D website generation, live preview, deployment. **Deployment architecture is done**: `DeploymentProvider` (`LocalDeploymentProvider` — real zip packaging, no credentials — plus Netlify/Vercel architecture points) is ready for website generation to use once built; website generation itself remains ⬜.
 9. 🟡 **Integration** — projects ↔ knowledge ↔ history ↔ files ↔ AI context ↔ activity log. **Production-readiness architecture** (landed alongside Phase 7): local/production runtime-mode switching (`AI_RUNTIME_MODE`), a real generation job queue (`GenerationJob` + `JobQueue` + `InProcessJobQueue`, Celery/RQ-swappable, and Image/Video generation already run through it), the Capability API (`GET /api/system/capabilities`) and Health API (`GET /health`, `GET /api/system/providers/health`), a System Status frontend page + Settings tabs, and technical rate-limiting/concurrency/upload-size protection (no user-visible credit system). **Cross-module wiring is done**: every artifact type (`HistoryEntry`, `Document`, `GenerationJob`, `Conversation`, `KnowledgeAnalysis`) already carried an optional `project_id` at the database/API level, but the project workspace UI only exposed History — its Chat/Knowledge/Files tabs were stale placeholders. They're now real: **Files** lists the project's documents and generated media with download links (`GET /documents?project_id=`, `GET /jobs?project_id=`); **Knowledge** lists the project's gap analyses with a deep link to run a new one pre-scoped to the project (`GET /knowledge/gaps?project_id=`, `knowledge-gaps.html?project_id=`); **Chat** lists the project's conversations with deep links into `agent.html` (`?conversation=` opens one directly, `?project_id=` pre-scopes the "new chat" modal to Project mode). **AI context is real, not just name/description**: a Project-mode (or any project-scoped) conversation's system prompt now includes the project's most recent `HistoryEntry` activity (documents, generated media, knowledge updates — chat excluded) via `_build_project_activity_context` in `app/agents/orchestrator.py`, so Claude is aware of what's actually happened in the project without the user re-explaining it. "Activity log" was never a separate concept from History — that item is resolved by definition. Remaining integration work: a persistent-broker `JobQueue` implementation for true multi-worker production scaling, and a Documents Studio project filter (the backend already supports `?project_id=` on `GET /documents`; the standalone Documents page doesn't expose it yet — only the project workspace's Files tab does).
 10. ⬜ **Testing** — expanded integration/E2E/security test coverage

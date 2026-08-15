@@ -1,6 +1,6 @@
 """Tests for the AI Media + Document Generation phase: /api/generation/image,
 /api/generation/video (image/video generation jobs, backed by
-GeminiImageProvider/GeminiVideoProvider once configured, exercised here via
+OpenAIImageProvider/GeminiVideoProvider once configured, exercised here via
 fakes so no real network call is made), and /api/generation/document/
 {word,ppt,excel} (structured, non-AI document generation via
 python-docx/python-pptx/openpyxl).
@@ -35,11 +35,11 @@ class _FakeImageProvider(ImageProvider):
         self._fail = fail
 
     def capability(self) -> CapabilityStatus:
-        return CapabilityStatus(available=True, provider="fake-gemini", mode="production", reason="configured")
+        return CapabilityStatus(available=True, provider="fake-openai", mode="production", reason="configured")
 
     async def generate(self, prompt: str, width: int = 1024, height: int = 1024) -> GeneratedImage:
         if self._fail:
-            raise GenerationProviderRequestError("Fake Gemini image generation failed.")
+            raise GenerationProviderRequestError("Fake OpenAI image generation failed.")
         return GeneratedImage(data=self._data, format="png", content_type="image/png", width=width, height=height)
 
 
@@ -103,7 +103,7 @@ class TestImageGenerationEndpoint:
 
     def test_honestly_fails_when_no_provider_configured(self, auth_client):
         """Default test config has IMAGE_PROVIDER=cloud (the app default —
-        image generation is API-based only) but no GEMINI_API_KEY — the
+        image generation is API-based only) but no OPENAI_API_KEY — the
         job must land on `failed` with a real reason, never `completed`
         with fabricated output."""
         client, csrf = auth_client

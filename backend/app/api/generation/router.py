@@ -6,10 +6,12 @@ ownership lookup, and download logic is shared with `/api/jobs/*` via
 module only adds prompt/provider-specific request shaping (image
 width/height, optional video reference image) and type-scoped routes.
 
-Frontend never talks to Gemini directly: it calls these backend routes,
-which resolve a provider through get_image_provider()/get_video_provider()
-(env-configured, never hard-coded) and hand off to the GenerationJob
-queue. The Gemini API key never leaves the backend process.
+Frontend never talks to a vendor API directly: it calls these backend
+routes, which resolve a provider through
+get_image_provider()/get_video_provider() (env-configured, never
+hard-coded — image is OpenAI, video is Gemini/Veo, see
+app/core/config.py) and hand off to the GenerationJob queue. Vendor API
+keys never leave the backend process.
 """
 import base64
 import logging

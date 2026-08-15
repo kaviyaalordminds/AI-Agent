@@ -93,14 +93,22 @@ class Settings(BaseSettings):
     google_api_key: str | None = None
     gemini_model: str = "gemini-2.0-flash"
 
-    # --- Gemini media generation (image/video) ---
+    # --- Gemini media generation (video only — see openai_api_key below
+    # for image) ---
     # A separate key name since Google issues API keys per-project and a
     # deployment may reasonably want to scope media generation separately
     # from text; GEMINI_API_KEY falls back to GOOGLE_API_KEY (see
     # resolved_gemini_api_key below) so setting only one is also fine.
     gemini_api_key: str | None = None
-    gemini_image_model: str = "imagen-3.0-generate-002"
     gemini_video_model: str = "veo-2.0-generate-001"
+
+    # --- OpenAI image generation ---
+    # Provider name and credential are always separate values — OPENAI_API_KEY
+    # is a credential, never a provider selector. IMAGE_PROVIDER (below)
+    # picks "local" or "cloud"; when "cloud", this key is what the image
+    # factory actually uses (see app/integrations/generation/image/factory.py).
+    openai_api_key: str | None = None
+    openai_image_model: str = "dall-e-3"
 
     # --- Storage provider ---
     storage_provider: Literal["local"] = "local"
@@ -127,13 +135,15 @@ class Settings(BaseSettings):
 
     # --- Audio / Transcription / Image / Video / Voice providers ---
     # Each is architected as interface + local/cloud factory + honest
-    # capability detection. Image and video default to "cloud" (real
-    # Gemini Imagen/Veo providers, API-key-based, no GPU/local model ever
-    # required or installed) since this application is API-first for
-    # generation — see app/integrations/generation/{image,video}/
-    # gemini_provider.py. Audio/transcription/voice default to "local"
-    # (real local TTS via espeak-ng for audio; transcription/voice "cloud"
-    # remain configuration points for a future vendor integration). See
+    # capability detection. Image and video default to "cloud" (real,
+    # API-key-based providers, no GPU/local model ever required or
+    # installed) since this application is API-first for generation — image
+    # uses OpenAI (see app/integrations/generation/image/openai_provider.py,
+    # openai_api_key above), video uses Gemini/Veo (see
+    # app/integrations/generation/video/gemini_provider.py, gemini_api_key
+    # above). Audio/transcription/voice default to "local" (real local TTS
+    # via espeak-ng for audio; transcription/voice "cloud" remain
+    # configuration points for a future vendor integration). See
     # GET /api/system/capabilities for live status of every provider.
     tts_provider: Literal["local", "cloud"] = "local"
     transcription_provider: Literal["local", "cloud"] = "local"
