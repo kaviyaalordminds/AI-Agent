@@ -2,7 +2,7 @@ import base64
 import uuid
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class CreateImageJobRequest(BaseModel):
@@ -66,6 +66,54 @@ class CreateVideoJobRequest(BaseModel):
         except Exception as exc:
             raise ValueError("reference_image_base64 must be valid base64-encoded image data.") from exc
         return value
+
+
+def sniff_image_format(data: bytes) -> str:
+    """Identifies an image's real format from its magic bytes (never
+    trusts a client-supplied filename/extension) and rejects anything
+    OpenAI's image-editing API can't accept. Returns the MIME type."""
+    if data.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if data.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if len(data) >= 12 and data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return "image/webp"
+    raise ValueError("Unsupported image format. Please upload a PNG, JPEG, or WEBP image.")
+
+
+class CreateImageEnhancementJobRequest(BaseModel):
+    image_base64: str = Field(
+        min_length=1,
+        max_length=40_000_000,  # ~30MB decoded; storage.write() enforces the real MAX_UPLOAD_FILE_SIZE_MB limit
+        description="Base64-encoded source image to enhance.",
+    )
+    enhancement_type: Literal["auto", "upscale", "denoise", "color_correction", "sharpen", "restore", "custom"] = "auto"
+    prompt: str | None = Field(
+        default=None, max_length=1000, description="Custom enhancement instructions."
+    )
+    width: int = Field(default=1024, ge=256, le=2048)
+    height: int = Field(default=1024, ge=256, le=2048)
+    project_id: uuid.UUID | None = None
+
+    @field_validator("image_base64")
+    @classmethod
+    def _validate_image(cls, value: str) -> str:
+        try:
+            decoded = base64.b64decode(value, validate=True)
+        except Exception as exc:
+            raise ValueError("image_base64 must be valid base64-encoded image data.") from exc
+        sniff_image_format(decoded)  # raises ValueError for anything unsupported
+        return value
+
+    @model_validator(mode="after")
+    def _require_prompt_for_custom(self) -> "CreateImageEnhancementJobRequest":
+        # A plain @field_validator on `prompt` would NOT catch the case
+        # where prompt is simply omitted (Pydantic v2 skips field
+        # validators for unset fields left at their default unless
+        # validate_default=True) — a model-level validator always runs.
+        if self.enhancement_type == "custom" and not (self.prompt and self.prompt.strip()):
+            raise ValueError("prompt is required when enhancement_type is 'custom'.")
+        return self
 
 
 class CreateTranscriptionJobRequest(BaseModel):

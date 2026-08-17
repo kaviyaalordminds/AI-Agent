@@ -223,6 +223,60 @@ class TestOpenAIImageProviderRequestFormat:
             await provider.generate("a red apple")
 
 
+class TestOpenAIImageProviderEnhance:
+    """Coverage for the image-editing/enhancement path (POST
+    /v1/images/edits), separate from generate() (POST
+    /v1/images/generations) — real image-to-image editing via a
+    multipart upload, not text-to-image."""
+
+    @pytest.mark.asyncio
+    async def test_enhance_posts_multipart_with_image_and_prompt(self):
+        seen = {}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            seen["path"] = request.url.path
+            seen["content_type_header"] = request.headers.get("content-type", "")
+            return httpx.Response(200, json={"data": [{"b64_json": base64.b64encode(b"enhanced-bytes").decode()}]})
+
+        provider = OpenAIImageProvider(
+            api_key="test-key", model="gpt-image-1", transport=httpx.MockTransport(handler)
+        )
+        result = await provider.enhance(b"\x89PNG\r\n\x1a\nfake-png", "image/png", "sharpen this image")
+
+        assert seen["path"] == "/v1/images/edits"
+        assert "multipart/form-data" in seen["content_type_header"]
+        assert result.data == b"enhanced-bytes"
+        assert result.content_type == "image/png"
+
+    @pytest.mark.asyncio
+    async def test_dalle3_rejects_enhancement_with_clear_error(self):
+        provider = OpenAIImageProvider(api_key="test-key", model="dall-e-3", transport=None)
+        with pytest.raises(GenerationProviderRequestError, match="does not support image editing"):
+            await provider.enhance(b"\x89PNG\r\n\x1a\nfake-png", "image/png", "sharpen this image")
+
+    @pytest.mark.asyncio
+    async def test_enhance_429_raises_quota_exceeded(self):
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(429, json={"error": {"message": "quota exceeded", "code": "insufficient_quota"}})
+
+        provider = OpenAIImageProvider(
+            api_key="test-key", model="gpt-image-1", transport=httpx.MockTransport(handler)
+        )
+        with pytest.raises(GenerationProviderQuotaExceededError):
+            await provider.enhance(b"\x89PNG\r\n\x1a\nfake-png", "image/png", "sharpen this image")
+
+    @pytest.mark.asyncio
+    async def test_enhance_network_failure_raises_provider_unavailable(self):
+        def handler(request: httpx.Request) -> httpx.Response:
+            raise httpx.ConnectError("connection refused")
+
+        provider = OpenAIImageProvider(
+            api_key="test-key", model="gpt-image-1", transport=httpx.MockTransport(handler)
+        )
+        with pytest.raises(GenerationProviderUnavailableError):
+            await provider.enhance(b"\x89PNG\r\n\x1a\nfake-png", "image/png", "sharpen this image")
+
+
 class TestGeminiVideoProviderErrorClassification:
     """Same classification contract as OpenAI image (see above), applied
     to the Gemini video provider — including the case unique to Veo's

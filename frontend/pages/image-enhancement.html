@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Image Enhancement · Shadow AI</title>
+<script>
+  (function () {
+    var theme = localStorage.getItem("aiagent:theme") || "dark";
+    document.documentElement.setAttribute("data-theme", theme);
+  })();
+</script>
+<link rel="icon" type="image/svg+xml" href="../assets/images/favicon.svg">
+<link rel="stylesheet" href="../assets/vendor/bootstrap/css/bootstrap.min.css">
+<link rel="stylesheet" href="../assets/vendor/bootstrap-icons/bootstrap-icons.min.css">
+<link rel="stylesheet" href="../assets/css/theme.css">
+<link rel="stylesheet" href="../assets/css/app.css">
+<link rel="stylesheet" href="../assets/css/agent.css">
+<link rel="stylesheet" href="../assets/css/documents.css">
+<link rel="stylesheet" href="../assets/css/media-generation.css">
+</head>
+<body>
+
+<div class="app-shell">
+  <aside class="app-sidebar" id="app-sidebar"></aside>
+
+  <div class="app-main">
+    <header class="app-topbar">
+      <div class="d-flex align-items-center gap-3">
+        <button type="button" class="sidebar-collapse-btn d-md-none" id="mobile-sidebar-toggle" aria-label="Toggle sidebar" title="Toggle sidebar"><i class="bi bi-list"></i></button>
+        <h5 class="mb-0">Image Enhancement</h5>
+      </div>
+      <div class="d-flex align-items-center gap-3">
+        <div class="theme-toggle" data-theme-toggle>
+          <button type="button" data-theme-value="light" title="Light theme"><i class="bi bi-sun"></i></button>
+          <button type="button" data-theme-value="dark" title="Dark theme"><i class="bi bi-moon-stars"></i></button>
+        </div>
+        <div class="user-menu-trigger" onclick="window.location.href='profile.html'">
+          <div class="avatar-circle" id="topbar-user-avatar">--</div>
+          <div class="d-none d-sm-block">
+            <div style="font-size:0.85rem; font-weight:600;" id="topbar-user-name">Loading…</div>
+            <div style="font-size:0.72rem; color:var(--text-muted);" id="topbar-user-email"></div>
+          </div>
+        </div>
+        <button type="button" class="btn-ghost" id="topbar-logout-btn" title="Log out"><i class="bi bi-box-arrow-right"></i></button>
+      </div>
+    </header>
+
+    <main class="app-content">
+      <div id="capability-banner" class="capability-banner d-none">
+        <i class="bi bi-exclamation-triangle-fill"></i><span></span>
+      </div>
+
+      <div class="gen-columns">
+        <div>
+          <div class="surface p-4 gen-form">
+            <h6 class="mb-3">Upload an image</h6>
+
+            <label class="upload-dropzone" id="enh-dropzone" for="enh-file">
+              <i class="bi bi-cloud-arrow-up"></i>
+              <span>Drag &amp; drop an image here, or click to browse</span>
+              <span class="upload-dropzone-hint">PNG, JPEG, or WEBP</span>
+              <input type="file" id="enh-file" accept="image/png,image/jpeg,image/webp">
+            </label>
+            <div class="field-error" data-error-for="file"></div>
+            <div id="enh-file-name" class="mt-2" style="font-size:0.82rem; color:var(--text-muted);"></div>
+            <div class="gen-preview-frame mt-2 d-none" id="enh-source-preview-frame" style="min-height:0;">
+              <img id="enh-source-preview-img" alt="Selected image preview" style="max-height:220px;">
+            </div>
+
+            <label class="field-label mt-3">Enhancement</label>
+            <div class="mode-pill-group" id="enh-type-picker"></div>
+
+            <div class="mb-3 mt-3 d-none" id="enh-custom-prompt-wrap">
+              <label class="field-label" for="enh-prompt">Instructions</label>
+              <textarea class="form-control-premium" id="enh-prompt" maxlength="1000" placeholder="Describe exactly how you want this image enhanced…"></textarea>
+              <div class="field-error" data-error-for="prompt"></div>
+            </div>
+
+            <div class="mb-3 mt-3">
+              <label class="field-label" for="enh-project">Project <span style="font-weight:400; color:var(--text-muted);">(optional)</span></label>
+              <select class="form-control-premium" id="enh-project">
+                <option value="">No project</option>
+              </select>
+            </div>
+            <button type="button" class="btn-brand" id="enh-generate-btn"><i class="bi bi-magic"></i> Enhance image</button>
+          </div>
+
+          <div class="surface p-4 mt-4" id="enh-result-panel" style="display:none;">
+            <div class="d-flex align-items-center justify-content-between mb-3">
+              <h6 class="mb-0">Result</h6>
+              <span id="enh-result-status"></span>
+            </div>
+            <div id="enh-result-body"></div>
+          </div>
+
+          <div id="enh-empty-state" class="empty-state">
+            <div class="empty-icon"><i class="bi bi-magic"></i></div>
+            <h5>No enhancement yet</h5>
+            <p style="font-size:0.85rem;">Upload an image above and enhance it via the configured provider.</p>
+          </div>
+        </div>
+
+        <div class="surface p-4">
+          <h6 class="mb-3">Recent enhancements</h6>
+          <div id="enh-list">
+            <div class="skeleton mb-2" style="height:56px; border-radius:10px;"></div>
+            <div class="skeleton" style="height:56px; border-radius:10px;"></div>
+          </div>
+          <div id="enh-list-empty" class="empty-state d-none" style="padding:1.5rem 0.5rem;">
+            <div class="empty-icon"><i class="bi bi-images"></i></div>
+            <h6>No enhancements yet</h6>
+            <p style="font-size:0.82rem;">Images you enhance will be listed here.</p>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script src="../assets/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
+<script src="../assets/js/config.js"></script>
+<script src="../assets/js/api.js"></script>
+<script src="../assets/js/theme.js"></script>
+<script src="../assets/js/toast.js"></script>
+<script src="../assets/js/nav.js"></script>
+<script src="../assets/js/modals.js"></script>
+<script src="../assets/js/generation-common.js"></script>
+<script src="../assets/js/image-enhancement.js"></script>
+</body>
+</html>

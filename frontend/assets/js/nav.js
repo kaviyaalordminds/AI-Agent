@@ -16,6 +16,7 @@ const NAV_STRUCTURE = [
     label: "Create",
     items: [
       { key: "image", label: "Image", icon: "bi-image", href: "image-generation.html", enabled: true },
+      { key: "image-enhancement", label: "Image Enhancement", icon: "bi-magic", href: "image-enhancement.html", enabled: true },
       { key: "audio-generation", label: "Audio", icon: "bi-mic", href: "audio-generation.html", enabled: true },
       { key: "audio-transcription", label: "Audio Transcription", icon: "bi-file-earmark-text", href: "audio-transcription.html", enabled: true },
       { key: "audio-cloning", label: "Audio Cloning", icon: "bi-person-vcard", href: "audio-cloning.html", enabled: true },

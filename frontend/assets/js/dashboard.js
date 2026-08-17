@@ -1,7 +1,9 @@
 const QUICK_CREATE = [
   { icon: "bi-image", label: "Image", href: "image-generation.html" },
+  { icon: "bi-magic", label: "Image Enhancement", href: "image-enhancement.html" },
   { icon: "bi-camera-reels", label: "Video", href: "video-generation.html" },
-  { icon: "bi-mic", label: "Audio" },
+  { icon: "bi-file-earmark-text", label: "Audio Transcription", href: "audio-transcription.html" },
+  { icon: "bi-person-vcard", label: "Audio Cloning", href: "audio-cloning.html" },
   { icon: "bi-easel", label: "PPT", href: "ppt-generation.html" },
   { icon: "bi-file-earmark-text", label: "Word", href: "documents.html" },
   { icon: "bi-file-earmark-spreadsheet", label: "Excel", href: "excel-generation.html" },

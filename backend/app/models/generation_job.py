@@ -13,6 +13,7 @@ class JobType(str, enum.Enum):
     audio = "audio"
     transcription = "transcription"
     image = "image"
+    image_enhancement = "image_enhancement"
     video = "video"
     voice_clone = "voice_clone"
     poster = "poster"

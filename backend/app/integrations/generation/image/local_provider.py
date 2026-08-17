@@ -41,3 +41,8 @@ class LocalImageProvider(ImageProvider):
 
     async def generate(self, prompt: str, width: int = 1024, height: int = 1024) -> GeneratedImage:
         raise GenerationProviderNotConfiguredError(self.capability().reason)
+
+    async def enhance(
+        self, image: bytes, image_content_type: str, prompt: str, width: int = 1024, height: int = 1024
+    ) -> GeneratedImage:
+        raise GenerationProviderNotConfiguredError(self.capability().reason)

@@ -12,6 +12,7 @@ from app.database.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 class HistoryEntryType(str, enum.Enum):
     chat = "chat"
     image = "image"
+    image_enhancement = "image_enhancement"
     video = "video"
     audio = "audio"
     document = "document"

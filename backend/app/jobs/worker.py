@@ -33,6 +33,7 @@ _HISTORY_TYPE_FOR_JOB_TYPE = {
     JobType.audio: HistoryEntryType.audio,
     JobType.transcription: HistoryEntryType.audio,
     JobType.image: HistoryEntryType.image,
+    JobType.image_enhancement: HistoryEntryType.image_enhancement,
     JobType.video: HistoryEntryType.video,
     JobType.poster: HistoryEntryType.poster,
     JobType.logo: HistoryEntryType.logo,
@@ -98,6 +99,27 @@ async def _run_image_job(job: GenerationJob, storage, db) -> dict:
     return {"storage_ref": stored.ref, "content_type": result.content_type, "size_bytes": stored.size_bytes}
 
 
+async def _run_image_enhancement_job(job: GenerationJob, storage, db) -> dict:
+    provider = get_image_provider()
+    cap = provider.capability()
+    meta = job.input_metadata
+    source_bytes = storage.read(meta["source_image_ref"])
+    logger.info(
+        "job %s: calling image provider=%s (enhance) model_configured=%s enhancement_type=%s",
+        job.id, cap.provider, cap.available, meta.get("enhancement_type"),
+    )
+    result = await provider.enhance(
+        source_bytes,
+        meta.get("source_content_type", "image/png"),
+        meta["prompt"],
+        width=meta.get("width", 1024),
+        height=meta.get("height", 1024),
+    )
+    logger.info("job %s: image provider returned %d bytes (%s)", job.id, len(result.data), result.content_type)
+    stored = storage.write("enhanced_images", str(job.user_id), f"{job.id}.{result.format}", result.data)
+    return {"storage_ref": stored.ref, "content_type": result.content_type, "size_bytes": stored.size_bytes}
+
+
 async def _run_video_job(job: GenerationJob, storage, db) -> dict:
     provider = get_video_provider()
     cap = provider.capability()
@@ -121,6 +143,7 @@ _RUNNERS = {
     JobType.audio: _run_audio_job,
     JobType.transcription: _run_transcription_job,
     JobType.image: _run_image_job,
+    JobType.image_enhancement: _run_image_enhancement_job,
     JobType.video: _run_video_job,
     # Poster/logo/graphic design are all still just "call the image
     # provider with a prompt" — the domain-specific structuring already

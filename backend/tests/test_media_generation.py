@@ -54,6 +54,16 @@ class _FakeImageProvider(ImageProvider):
             raise GenerationProviderRequestError("Fake OpenAI image generation failed.")
         return GeneratedImage(data=self._data, format="png", content_type="image/png", width=width, height=height)
 
+    async def enhance(
+        self, image: bytes, image_content_type: str, prompt: str, width: int = 1024, height: int = 1024
+    ) -> GeneratedImage:
+        self.last_enhance_input = (image, image_content_type, prompt)
+        if self._fail_with is not None:
+            raise self._fail_with
+        if self._fail:
+            raise GenerationProviderRequestError("Fake OpenAI image enhancement failed.")
+        return GeneratedImage(data=self._data, format="png", content_type="image/png", width=width, height=height)
+
 
 class _FakeVideoProvider(VideoProvider):
     def __init__(
@@ -237,6 +247,204 @@ class TestImageGenerationEndpoint:
         _signup_second_user(client, email_outbox)
         assert client.get(f"/api/generation/image/{job_id}").status_code == 404
         assert client.get(f"/api/generation/image/{job_id}/download").status_code == 404
+
+
+_VALID_PNG_BASE64 = (
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+)
+
+
+class TestImageEnhancementEndpoint:
+    def test_requires_authentication(self, client):
+        assert (
+            client.post("/api/generation/image/enhance", json={"image_base64": _VALID_PNG_BASE64}).status_code
+            == 401
+        )
+
+    def test_requires_csrf(self, auth_client):
+        client, _csrf = auth_client
+        resp = client.post("/api/generation/image/enhance", json={"image_base64": _VALID_PNG_BASE64})
+        assert resp.status_code == 403
+
+    def test_missing_image_rejected(self, auth_client):
+        client, csrf = auth_client
+        resp = client.post("/api/generation/image/enhance", json={}, headers={"X-CSRF-Token": csrf})
+        assert resp.status_code == 422
+
+    def test_invalid_base64_rejected(self, auth_client):
+        client, csrf = auth_client
+        resp = client.post(
+            "/api/generation/image/enhance",
+            json={"image_base64": "not-valid-base64!!"},
+            headers={"X-CSRF-Token": csrf},
+        )
+        assert resp.status_code == 422
+
+    def test_unsupported_image_format_rejected(self, auth_client):
+        client, csrf = auth_client
+        import base64
+
+        not_an_image = base64.b64encode(b"this is just plain text, not an image").decode()
+        resp = client.post(
+            "/api/generation/image/enhance",
+            json={"image_base64": not_an_image},
+            headers={"X-CSRF-Token": csrf},
+        )
+        assert resp.status_code == 422
+
+    def test_custom_enhancement_type_requires_prompt(self, auth_client):
+        client, csrf = auth_client
+        resp = client.post(
+            "/api/generation/image/enhance",
+            json={"image_base64": _VALID_PNG_BASE64, "enhancement_type": "custom"},
+            headers={"X-CSRF-Token": csrf},
+        )
+        assert resp.status_code == 422
+
+    def test_honestly_fails_when_no_provider_configured(self, auth_client):
+        client, csrf = auth_client
+        resp = client.post(
+            "/api/generation/image/enhance",
+            json={"image_base64": _VALID_PNG_BASE64},
+            headers={"X-CSRF-Token": csrf},
+        )
+        assert resp.status_code == 202
+        job = _poll_until_terminal(client, f"/api/generation/image/enhance/{resp.json()['id']}")
+        assert job["status"] == "failed"
+        assert job["error"]
+        assert job["error_type"] == "not_configured"
+
+    def test_quota_exceeded_is_recorded_with_structured_error_type(self, auth_client, monkeypatch):
+        client, csrf = auth_client
+        import app.jobs.worker as worker_module
+
+        fake = _FakeImageProvider(
+            fail_with=GenerationProviderQuotaExceededError(
+                "OpenAI image enhancement failed (429): insufficient_quota"
+            )
+        )
+        monkeypatch.setattr(worker_module, "get_image_provider", lambda: fake)
+
+        resp = client.post(
+            "/api/generation/image/enhance",
+            json={"image_base64": _VALID_PNG_BASE64},
+            headers={"X-CSRF-Token": csrf},
+        )
+        assert resp.status_code == 202
+        job = _poll_until_terminal(client, f"/api/generation/image/enhance/{resp.json()['id']}")
+        assert job["status"] == "failed"
+        assert job["error_type"] == "quota_exceeded"
+
+    def test_succeeds_with_configured_provider_and_is_downloadable(self, auth_client, monkeypatch):
+        client, csrf = auth_client
+        import app.jobs.worker as worker_module
+
+        fake = _FakeImageProvider()
+        monkeypatch.setattr(worker_module, "get_image_provider", lambda: fake)
+
+        resp = client.post(
+            "/api/generation/image/enhance",
+            json={"image_base64": _VALID_PNG_BASE64, "enhancement_type": "upscale"},
+            headers={"X-CSRF-Token": csrf},
+        )
+        assert resp.status_code == 202
+        job = _poll_until_terminal(client, f"/api/generation/image/enhance/{resp.json()['id']}")
+        assert job["status"] == "completed"
+        assert job["output_metadata"]["content_type"] == "image/png"
+        assert "Upscale" in fake.last_enhance_input[2] or "upscale" in fake.last_enhance_input[2].lower()
+
+        download = client.get(f"/api/generation/image/enhance/{job['id']}/download")
+        assert download.status_code == 200
+        assert download.headers["content-type"] == "image/png"
+        assert download.content == fake._data
+
+    def test_custom_prompt_is_used(self, auth_client, monkeypatch):
+        client, csrf = auth_client
+        import app.jobs.worker as worker_module
+
+        fake = _FakeImageProvider()
+        monkeypatch.setattr(worker_module, "get_image_provider", lambda: fake)
+
+        resp = client.post(
+            "/api/generation/image/enhance",
+            json={
+                "image_base64": _VALID_PNG_BASE64,
+                "enhancement_type": "custom",
+                "prompt": "Make the sky more dramatic.",
+            },
+            headers={"X-CSRF-Token": csrf},
+        )
+        _poll_until_terminal(client, f"/api/generation/image/enhance/{resp.json()['id']}")
+        assert fake.last_enhance_input[2] == "Make the sky more dramatic."
+
+    def test_project_association_and_invalid_project_rejected(self, auth_client, monkeypatch):
+        client, csrf = auth_client
+        import app.jobs.worker as worker_module
+
+        monkeypatch.setattr(worker_module, "get_image_provider", lambda: _FakeImageProvider())
+
+        project = client.post(
+            "/api/projects", json={"name": "Enhancement Project"}, headers={"X-CSRF-Token": csrf}
+        ).json()
+        resp = client.post(
+            "/api/generation/image/enhance",
+            json={"image_base64": _VALID_PNG_BASE64, "project_id": project["id"]},
+            headers={"X-CSRF-Token": csrf},
+        )
+        assert resp.status_code == 202
+        assert resp.json()["project_id"] == project["id"]
+
+        bad = client.post(
+            "/api/generation/image/enhance",
+            json={"image_base64": _VALID_PNG_BASE64, "project_id": "00000000-0000-0000-0000-000000000000"},
+            headers={"X-CSRF-Token": csrf},
+        )
+        assert bad.status_code == 404
+
+    def test_generation_is_logged_to_history(self, auth_client, monkeypatch):
+        client, csrf = auth_client
+        import app.jobs.worker as worker_module
+
+        monkeypatch.setattr(worker_module, "get_image_provider", lambda: _FakeImageProvider())
+        resp = client.post(
+            "/api/generation/image/enhance",
+            json={"image_base64": _VALID_PNG_BASE64},
+            headers={"X-CSRF-Token": csrf},
+        )
+        _poll_until_terminal(client, f"/api/generation/image/enhance/{resp.json()['id']}")
+
+        history = client.get("/api/history?type=image_enhancement").json()["items"]
+        assert len(history) == 1
+        assert history[0]["status"] == "completed"
+
+    def test_image_job_id_not_visible_via_enhancement_routes(self, auth_client, monkeypatch):
+        client, csrf = auth_client
+        import app.jobs.worker as worker_module
+
+        monkeypatch.setattr(worker_module, "get_image_provider", lambda: _FakeImageProvider())
+        image_resp = client.post(
+            "/api/generation/image", json={"prompt": "a cat"}, headers={"X-CSRF-Token": csrf}
+        )
+        image_job_id = image_resp.json()["id"]
+        assert client.get(f"/api/generation/image/enhance/{image_job_id}").status_code == 404
+        assert client.get(f"/api/generation/image/enhance/{image_job_id}/download").status_code == 404
+
+    def test_isolated_between_users(self, auth_client, client, email_outbox, monkeypatch):
+        import app.jobs.worker as worker_module
+
+        monkeypatch.setattr(worker_module, "get_image_provider", lambda: _FakeImageProvider())
+        owner_client, owner_csrf = auth_client
+        resp = owner_client.post(
+            "/api/generation/image/enhance",
+            json={"image_base64": _VALID_PNG_BASE64},
+            headers={"X-CSRF-Token": owner_csrf},
+        )
+        job_id = resp.json()["id"]
+        _poll_until_terminal(owner_client, f"/api/generation/image/enhance/{job_id}")
+
+        _signup_second_user(client, email_outbox, email="second-enhance@example.com")
+        assert client.get(f"/api/generation/image/enhance/{job_id}").status_code == 404
+        assert client.get(f"/api/generation/image/enhance/{job_id}/download").status_code == 404
 
 
 class TestPosterLogoGraphicDesignEndpoints:

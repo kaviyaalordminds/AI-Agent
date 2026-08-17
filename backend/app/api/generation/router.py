@@ -54,6 +54,7 @@ from app.models.voice_profile import VoiceProfile
 from app.schemas.document import DocumentOut
 from app.schemas.generation import (
     CreateGraphicDesignJobRequest,
+    CreateImageEnhancementJobRequest,
     CreateImageJobRequest,
     CreateLogoJobRequest,
     CreatePosterJobRequest,
@@ -62,6 +63,7 @@ from app.schemas.generation import (
     ExcelDocumentRequest,
     PptDocumentRequest,
     WordDocumentRequest,
+    sniff_image_format,
 )
 from app.schemas.job import JobOut
 from app.schemas.voice import CreateVoiceCloneRequest, VoiceProfileOut
@@ -125,6 +127,109 @@ def download_image_generation(
     job_id: uuid.UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     job = _ensure_type(get_owned_job(db, user, job_id), JobType.image)
+    return build_download_response(job)
+
+
+# --- Image Enhancement: takes an existing uploaded image and improves it
+# via the same OpenAIImageProvider used by Image Generation (its
+# `enhance()` method, image-to-image via OpenAI's /v1/images/edits), NOT
+# a duplicate provider architecture. Follows the exact same job-queue
+# pattern as plain image generation above (POST creates a queued
+# GenerationJob and returns 202 immediately; app/jobs/worker.py's
+# _run_image_enhancement_job does the actual provider call out of
+# request scope) — the only difference is the source image is uploaded
+# and stored first, and the prompt is built server-side from a small set
+# of enhancement presets rather than typed by hand.
+_ENHANCEMENT_PROMPTS = {
+    "auto": (
+        "Enhance this image: improve overall clarity, lighting, and color balance, and "
+        "increase detail, while preserving the original subject and composition exactly."
+    ),
+    "upscale": (
+        "Upscale this image, increasing resolution and detail while preserving the "
+        "original subject and composition exactly."
+    ),
+    "denoise": (
+        "Remove noise and grain from this image, smoothing artifacts while preserving "
+        "genuine detail and the original subject and composition exactly."
+    ),
+    "color_correction": (
+        "Correct the color balance, exposure, and contrast of this image for a natural, "
+        "well-balanced look, preserving the original subject and composition exactly."
+    ),
+    "sharpen": (
+        "Sharpen this image and enhance fine detail and edge definition, preserving the "
+        "original subject and composition exactly."
+    ),
+    "restore": (
+        "Restore this image: repair damage, fading, or artifacts and recover natural "
+        "detail, preserving the original subject and composition exactly."
+    ),
+}
+
+
+def _build_enhancement_prompt(enhancement_type: str, custom_prompt: str | None) -> str:
+    base = _ENHANCEMENT_PROMPTS.get(enhancement_type, "")
+    if custom_prompt:
+        return f"{base} Additional instructions: {custom_prompt}" if base else custom_prompt
+    return base
+
+
+@router.post("/image/enhance", response_model=JobOut, status_code=status.HTTP_202_ACCEPTED)
+async def create_image_enhancement(
+    payload: CreateImageEnhancementJobRequest,
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    _csrf: None = Depends(require_csrf),
+):
+    settings = get_settings()
+    enforce_rate_limit(request, "generation", settings.generation_rate_limit_max_requests)
+    enforce_concurrency_limit(db, user)
+    project = resolve_owned_project(db, user, payload.project_id)
+
+    image_bytes = base64.b64decode(payload.image_base64)
+    content_type = sniff_image_format(image_bytes)  # already validated by the schema; re-derived, never trusted from the client
+    extension = content_type.split("/")[-1]
+    stored = get_storage_provider().write(
+        "image_enhancement_uploads", str(user.id), f"{uuid.uuid4()}.{extension}", image_bytes
+    )
+
+    built_prompt = _build_enhancement_prompt(payload.enhancement_type, payload.prompt)
+    provider_name = get_image_provider().capability().provider
+    logger.info(
+        "incoming image enhancement request: user=%s project=%s provider=%s enhancement_type=%s",
+        user.id, project.id if project else None, provider_name, payload.enhancement_type,
+    )
+    job = create_and_submit_job(
+        db,
+        user,
+        project,
+        JobType.image_enhancement,
+        provider_name,
+        {
+            "source_image_ref": stored.ref,
+            "source_content_type": content_type,
+            "prompt": built_prompt,
+            "enhancement_type": payload.enhancement_type,
+            "width": payload.width,
+            "height": payload.height,
+        },
+    )
+    logger.info("image enhancement job created: job_id=%s status=%s", job.id, job.status.value)
+    return job
+
+
+@router.get("/image/enhance/{job_id}", response_model=JobOut)
+def get_image_enhancement(job_id: uuid.UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return _ensure_type(get_owned_job(db, user, job_id), JobType.image_enhancement)
+
+
+@router.get("/image/enhance/{job_id}/download")
+def download_image_enhancement(
+    job_id: uuid.UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)
+):
+    job = _ensure_type(get_owned_job(db, user, job_id), JobType.image_enhancement)
     return build_download_response(job)
 
 

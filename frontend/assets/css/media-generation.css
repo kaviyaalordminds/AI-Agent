@@ -53,6 +53,36 @@
 }
 .gen-preview-frame audio { width: 100%; max-width: 480px; }
 
+/* --- Drag-and-drop upload zone (Image Enhancement, Audio Transcription/
+ * Cloning file pickers) --- */
+.upload-dropzone {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 0.4rem;
+  min-height: 140px;
+  padding: 1.25rem;
+  text-align: center;
+  border: 1.5px dashed var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface-alt);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.upload-dropzone i { font-size: 1.6rem; opacity: 0.7; }
+.upload-dropzone:hover, .upload-dropzone.dragover {
+  border-color: var(--brand-500);
+  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--brand-500) 8%, var(--bg-surface-alt));
+}
+.upload-dropzone input[type="file"] { display: none; }
+.upload-dropzone .upload-dropzone-hint { font-size: 0.78rem; }
+
+/* --- Before/after image comparison (Image Enhancement result) --- */
+.enhance-compare { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+@media (max-width: 640px) { .enhance-compare { grid-template-columns: 1fr; } }
+.enhance-compare-col { display: flex; flex-direction: column; gap: 0.4rem; }
+.enhance-compare-label { font-size: 0.74rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-muted); }
+
 /* --- Transcription result text + voice-clone list rows --- */
 .gen-transcript-text {
   white-space: pre-wrap;
