@@ -110,6 +110,19 @@ function renderWebsiteResult(website) {
   document.getElementById("site-result-status").innerHTML = window.GenerationCommon.jobStatusBadge(website.status);
 
   const body = document.getElementById("site-result-body");
+  if (website.status === "processing") {
+    body.innerHTML = `
+      <div class="gen-preview-frame mb-3">
+        <div class="text-center">
+          <span class="spinner-border spinner-border-sm mb-2"></span>
+          <div class="gen-status-row justify-content-center">Drafting your website…</div>
+        </div>
+      </div>
+      <div class="gen-progress-track"><div class="gen-progress-fill indeterminate"></div></div>
+    `;
+    return;
+  }
+
   if (website.status === "failed" || !website.pages.length) {
     body.innerHTML = `<div class="alert-inline visible error">${window.GenerationCommon.escapeHtml(website.error || "This website could not be generated.")}</div>`;
     return;
@@ -240,6 +253,16 @@ async function generateWebsite() {
       project_id: projectId || undefined,
     });
     renderWebsiteResult(website);
+    await loadSites();
+
+    const finalWebsite = await window.GenerationCommon.pollJob(`/websites/${website.id}`, {
+      onTick: renderWebsiteResult,
+    });
+    if (finalWebsite.status === "failed") {
+      window.AIAgentToast.show(finalWebsite.error || "Website generation failed.", "error");
+    } else if (finalWebsite.status === "completed") {
+      window.AIAgentToast.show("Website generated.", "success");
+    }
     await loadSites();
   } catch (err) {
     if (err.status === 422) {

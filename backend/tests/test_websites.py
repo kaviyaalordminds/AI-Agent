@@ -3,13 +3,31 @@ POST /api/websites (AI-drafted multi-page static site via Claude, backed
 by the same StorageProvider pattern as Documents), the preview/deploy
 endpoints, and "3D Website" (style="3d" on this exact same pipeline, not
 a separate module).
+
+Generation itself runs as a background asyncio task (see
+app/websites/generator.py) rather than inside the request/response
+cycle, so POST /api/websites returns 202 with status="processing"
+immediately; these tests poll GET /api/websites/{id} for the real final
+status the same way the real frontend does.
 """
 import json
+import time
 import zipfile
 from io import BytesIO
 
 from app.integrations.claude.base import ClaudeProvider, ProviderStatus
 from app.integrations.claude.errors import ProviderRequestError
+
+
+def _poll_until_terminal(client, website_id, timeout=5.0):
+    deadline = time.monotonic() + timeout
+    body = None
+    while time.monotonic() < deadline:
+        body = client.get(f"/api/websites/{website_id}").json()
+        if body["status"] != "processing":
+            return body
+        time.sleep(0.02)
+    raise AssertionError(f"Website {website_id} did not leave 'processing' within {timeout}s: {body}")
 
 
 class _FakeProvider(ClaudeProvider):
@@ -104,8 +122,10 @@ class TestWebsitesEndpoint:
             },
             headers={"X-CSRF-Token": csrf},
         )
-        assert resp.status_code == 201
-        body = resp.json()
+        assert resp.status_code == 202
+        assert resp.json()["status"] == "processing"
+
+        body = _poll_until_terminal(client, resp.json()["id"])
         assert body["status"] == "completed"
         assert len(body["pages"]) == 3
         assert body["pages"][0]["path"] == "index.html"
@@ -122,8 +142,9 @@ class TestWebsitesEndpoint:
             json={"name": "My Site", "prompt": "a portfolio site"},
             headers={"X-CSRF-Token": csrf},
         )
-        assert resp.status_code == 201
-        body = resp.json()
+        assert resp.status_code == 202
+
+        body = _poll_until_terminal(client, resp.json()["id"])
         assert body["status"] == "failed"
         assert body["pages"] == []
         assert body["error"]
@@ -137,8 +158,10 @@ class TestWebsitesEndpoint:
             json={"name": "My Site", "prompt": "a portfolio site"},
             headers={"X-CSRF-Token": csrf},
         )
-        assert resp.status_code == 201
-        assert resp.json()["status"] == "failed"
+        assert resp.status_code == 202
+
+        body = _poll_until_terminal(client, resp.json()["id"])
+        assert body["status"] == "failed"
 
     def test_3d_style_is_accepted_and_generates_normally(self, auth_client, monkeypatch):
         client, csrf = auth_client
@@ -150,9 +173,11 @@ class TestWebsitesEndpoint:
             json={"name": "3D Showcase", "prompt": "an interactive 3D landing page", "style": "3d", "pages": ["Home"]},
             headers={"X-CSRF-Token": csrf},
         )
-        assert resp.status_code == 201
-        assert resp.json()["status"] == "completed"
+        assert resp.status_code == 202
         assert resp.json()["style"] == "3d"
+
+        body = _poll_until_terminal(client, resp.json()["id"])
+        assert body["status"] == "completed"
         assert "3d" in fake.received_messages[0].content.lower()
 
     def test_preview_serves_generated_html(self, auth_client, monkeypatch):
@@ -162,6 +187,7 @@ class TestWebsitesEndpoint:
             "/api/websites", json={"name": "My Site", "prompt": "a portfolio site", "pages": ["Home"]},
             headers={"X-CSRF-Token": csrf},
         ).json()["id"]
+        _poll_until_terminal(client, website_id)
 
         resp = client.get(f"/api/websites/{website_id}/preview/index.html")
         assert resp.status_code == 200
@@ -189,7 +215,7 @@ class TestWebsitesEndpoint:
             json={"name": "My Site", "prompt": "a portfolio site", "project_id": project["id"]},
             headers={"X-CSRF-Token": csrf},
         )
-        assert resp.status_code == 201
+        assert resp.status_code == 202
         assert resp.json()["project_id"] == project["id"]
 
         bad = client.post(
@@ -202,10 +228,12 @@ class TestWebsitesEndpoint:
     def test_generation_is_logged_to_history(self, auth_client, monkeypatch):
         client, csrf = auth_client
         _patch_provider(monkeypatch, _FakeProvider(_sample_pages_json(1)))
-        client.post(
+        website_id = client.post(
             "/api/websites", json={"name": "My Site", "prompt": "a portfolio site", "pages": ["Home"]},
             headers={"X-CSRF-Token": csrf},
-        )
+        ).json()["id"]
+        _poll_until_terminal(client, website_id)
+
         history = client.get("/api/history?type=website").json()["items"]
         assert len(history) == 1
         assert history[0]["status"] == "completed"
@@ -217,6 +245,7 @@ class TestWebsitesEndpoint:
             "/api/websites", json={"name": "My Site", "prompt": "a portfolio site", "pages": ["Home"]},
             headers={"X-CSRF-Token": csrf},
         ).json()["id"]
+        _poll_until_terminal(client, website_id)
 
         resp = client.delete(f"/api/websites/{website_id}", headers={"X-CSRF-Token": csrf})
         assert resp.status_code == 204
@@ -232,6 +261,7 @@ class TestWebsitesEndpoint:
             "/api/websites", json={"name": "Private Site", "prompt": "a private portfolio"},
             headers={"X-CSRF-Token": owner_csrf},
         ).json()["id"]
+        _poll_until_terminal(owner_client, website_id)
 
         password = "Str0ng!Passw0rd"
         client.post(
@@ -261,6 +291,7 @@ class TestWebsiteDeployment:
             json={"name": "My Site", "prompt": "a portfolio site", "pages": ["Home", "About"]},
             headers={"X-CSRF-Token": csrf},
         ).json()["id"]
+        _poll_until_terminal(client, website_id)
 
         resp = client.post(f"/api/websites/{website_id}/deploy", headers={"X-CSRF-Token": csrf})
         assert resp.status_code == 200
@@ -292,6 +323,7 @@ class TestWebsiteDeployment:
             "/api/websites", json={"name": "My Site", "prompt": "a portfolio site", "pages": ["Home"]},
             headers={"X-CSRF-Token": csrf},
         ).json()["id"]
+        _poll_until_terminal(client, website_id)
 
         resp = client.post(f"/api/websites/{website_id}/deploy")
         assert resp.status_code == 403
@@ -303,6 +335,7 @@ class TestWebsiteDeployment:
             "/api/websites", json={"name": "My Site", "prompt": "a portfolio site", "pages": ["Home"]},
             headers={"X-CSRF-Token": csrf},
         ).json()["id"]
+        _poll_until_terminal(client, website_id)
         client.post(f"/api/websites/{website_id}/deploy", headers={"X-CSRF-Token": csrf})
 
         history = client.get("/api/history?type=deployment").json()["items"]

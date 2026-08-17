@@ -1,3 +1,4 @@
+import asyncio
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
@@ -18,9 +19,16 @@ from app.models.website import Website, WebsiteStatus
 from app.schemas.website import CreateWebsiteRequest, DeployWebsiteResponse, WebsiteOut
 from app.security.rate_limit import enforce_rate_limit
 from app.security.sessions import get_current_user, require_csrf
-from app.websites.generator import generate_website, record_unavailable_website
+from app.websites.generator import create_processing_website, record_unavailable_website, run_website_generation
 
 router = APIRouter(prefix="/websites", tags=["websites"])
+
+# Keeps references to in-flight background generation tasks so they can't
+# be garbage-collected mid-run (a real asyncio gotcha: a task with no
+# surviving reference can be swept up by the GC before it finishes) —
+# same safety pattern app/jobs/in_process_queue.py already uses for
+# image/video/audio jobs.
+_background_tasks: set[asyncio.Task] = set()
 
 
 def _to_website_out(website: Website) -> WebsiteOut:
@@ -54,7 +62,7 @@ def get_website(website_id: uuid.UUID, user: User = Depends(get_current_user), d
     return _to_website_out(_get_owned_website(db, user, website_id))
 
 
-@router.post("", response_model=WebsiteOut, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=WebsiteOut, status_code=status.HTTP_202_ACCEPTED)
 async def create_website(
     payload: CreateWebsiteRequest,
     request: Request,
@@ -62,6 +70,13 @@ async def create_website(
     db: Session = Depends(get_db),
     _csrf: None = Depends(require_csrf),
 ):
+    """Returns immediately with status=processing rather than blocking
+    until Claude finishes drafting every page — asking for several
+    complete HTML documents in one completion can genuinely take well
+    over the frontend's request timeout for a multi-page site. The
+    frontend polls GET /{website_id} until it leaves `processing`, the
+    same pattern image/video/poster/logo/design generation already use
+    (see app/websites/generator.py's module docstring)."""
     settings = get_settings()
     enforce_rate_limit(request, "generation", settings.generation_rate_limit_max_requests)
 
@@ -78,10 +93,18 @@ async def create_website(
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
 
     storage_provider = get_storage_provider()
-    website = await generate_website(
-        db, user, project, claude_provider, storage_provider,
-        payload.name, payload.prompt, payload.style, payload.pages,
+    website = create_processing_website(db, user, project, payload.name, payload.prompt, payload.style)
+
+    task = asyncio.create_task(
+        run_website_generation(
+            website.id, user.id, project.id if project else None,
+            payload.name, payload.prompt, payload.style, payload.pages,
+            claude_provider, storage_provider,
+        )
     )
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+
     return _to_website_out(website)
 
 

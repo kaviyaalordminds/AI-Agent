@@ -9,6 +9,7 @@ from app.database.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
 
 class WebsiteStatus(str, enum.Enum):
+    processing = "processing"
     completed = "completed"
     failed = "failed"
 
