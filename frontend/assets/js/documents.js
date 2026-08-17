@@ -61,15 +61,17 @@ async function loadStatus() {
 async function loadProjects() {
   try {
     const projects = await window.AIAgentApi.get("/projects?status=all");
-    const select = document.getElementById("doc-project");
-    projects.forEach((p) => {
-      const opt = document.createElement("option");
-      opt.value = p.id;
-      opt.textContent = p.name;
-      select.appendChild(opt);
+    ["doc-project", "doc-list-project-filter"].forEach((selectId) => {
+      const select = document.getElementById(selectId);
+      projects.forEach((p) => {
+        const opt = document.createElement("option");
+        opt.value = p.id;
+        opt.textContent = p.name;
+        select.appendChild(opt);
+      });
     });
   } catch {
-    // Non-fatal: the project picker just stays limited to "No project".
+    // Non-fatal: the project pickers just stay limited to their default option.
   }
 }
 
@@ -115,6 +117,11 @@ function renderList() {
   if (!documents.length) {
     listEl.innerHTML = "";
     emptyEl.classList.remove("d-none");
+    const filtered = Boolean(document.getElementById("doc-list-project-filter").value);
+    emptyEl.querySelector("h6").textContent = filtered ? "No documents in this project" : "No documents yet";
+    emptyEl.querySelector("p").textContent = filtered
+      ? "Try a different project, or clear the filter."
+      : "Documents you generate will be listed here for download.";
     return;
   }
   emptyEl.classList.add("d-none");
@@ -162,7 +169,9 @@ function renderList() {
 
 async function loadDocuments() {
   try {
-    documents = await window.AIAgentApi.get("/documents");
+    const projectId = document.getElementById("doc-list-project-filter").value;
+    const query = projectId ? `?project_id=${encodeURIComponent(projectId)}` : "";
+    documents = await window.AIAgentApi.get(`/documents${query}`);
     renderList();
   } catch {
     window.AIAgentToast.show("Could not load your documents.", "error");
@@ -225,6 +234,7 @@ async function init() {
 
   renderFormatPicker();
   document.getElementById("doc-generate-btn").addEventListener("click", generateDocument);
+  document.getElementById("doc-list-project-filter").addEventListener("change", loadDocuments);
 
   await Promise.all([loadStatus(), loadProjects(), loadDocuments()]);
 }

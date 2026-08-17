@@ -204,11 +204,22 @@ class Settings(BaseSettings):
     generation_max_concurrent_jobs_per_user: int = 3
     generation_max_job_duration_seconds: int = 600
     # In-process worker pool size for JobQueue=in_process (local/dev default).
-    # A production deployment swaps JOB_QUEUE=in_process for a Celery/RQ-
-    # backed JobQueue implementation without changing job-creation call
+    # A production deployment swaps JOB_QUEUE=in_process for a persistent-
+    # broker JobQueue implementation without changing job-creation call
     # sites — see app/jobs/queue.py.
-    job_queue: Literal["in_process"] = "in_process"
+    job_queue: Literal["in_process", "rq"] = "in_process"
     job_queue_max_workers: int = 4
+    # Only read when job_queue == "rq": a Redis-backed (RQ) queue for true
+    # multi-worker production scaling — submitted jobs survive an app
+    # server restart/crash (they live in Redis, not this process's
+    # memory) and any number of `python -m app.jobs.rq_worker` processes,
+    # potentially on separate machines, can share the load. Requires a
+    # reachable Redis instance and at least one worker process started
+    # separately — see app/jobs/rq_worker.py and the README. Local
+    # development can ignore both settings entirely; the default
+    # in_process queue needs no extra infrastructure.
+    redis_url: str = "redis://localhost:6379/0"
+    rq_queue_name: str = "generation_jobs"
 
     # --- Email provider ---
     email_provider: Literal["console", "smtp"] = "console"

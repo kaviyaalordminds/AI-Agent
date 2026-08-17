@@ -18,6 +18,10 @@ venv/
 .idea/
 .DS_Store
 
+# Local Redis snapshot (created by running redis-server from backend/,
+# e.g. for JOB_QUEUE=rq testing) — never a build artifact to commit.
+*.rdb
+
 # Logs
 *.log
 
