@@ -114,6 +114,45 @@
   background: var(--bg-canvas);
 }
 
+/* --- Website Studio: page tabs + browser-chrome preview frame --- */
+.website-page-tabs { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.75rem; }
+.website-page-tab {
+  padding: 0.35rem 0.8rem;
+  border-radius: 999px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-surface-alt);
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.website-page-tab.active { background: linear-gradient(135deg, var(--brand-500), var(--brand-600)); color: #fff; border-color: transparent; }
+.website-browser-frame {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--bg-canvas);
+}
+.website-browser-chrome {
+  display: flex; align-items: center; gap: 0.4rem;
+  padding: 0.5rem 0.7rem;
+  background: var(--bg-surface-alt);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.website-browser-chrome .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--border-subtle); }
+.website-browser-chrome .url-bar {
+  flex: 1;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  background: var(--bg-canvas);
+  border-radius: 6px;
+  padding: 0.25rem 0.6rem;
+  overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+}
+.website-browser-frame iframe { width: 100%; height: 480px; border: none; display: block; background: #fff; }
+.page-input-row { display: flex; gap: 0.4rem; margin-bottom: 0.4rem; }
+.page-input-row .form-control-premium { flex: 1; }
+
 /* --- Structured content editors (Word/PPT/Excel) --- */
 .block-card, .slide-card, .sheet-card {
   border: 1px solid var(--border-subtle);

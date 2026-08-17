@@ -17,6 +17,7 @@ from app.api.obsidian.router import router as obsidian_router
 from app.api.projects.router import router as projects_router
 from app.api.system.router import router as system_router
 from app.api.users.router import router as users_router
+from app.api.websites.router import router as websites_router
 from app.core.config import get_settings
 from app.core.logging import configure_logging
 from app.integrations.storage.errors import FileTooLargeError, InvalidStoragePathError
@@ -221,6 +222,7 @@ app.include_router(documents_router, prefix=settings.api_prefix)
 app.include_router(jobs_router, prefix=settings.api_prefix)
 app.include_router(generation_router, prefix=settings.api_prefix)
 app.include_router(system_router, prefix=settings.api_prefix)
+app.include_router(websites_router, prefix=settings.api_prefix)
 
 
 @app.get(f"{settings.api_prefix}/health")

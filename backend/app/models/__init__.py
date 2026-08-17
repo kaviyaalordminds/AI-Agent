@@ -14,6 +14,7 @@ from app.models.token import EmailVerificationToken, PasswordResetToken  # noqa:
 from app.models.user import User  # noqa: F401
 from app.models.user_settings import UserSettings  # noqa: F401
 from app.models.voice_profile import VoiceProfile  # noqa: F401
+from app.models.website import Website, WebsiteStatus  # noqa: F401
 
 __all__ = [
     "User",
@@ -39,4 +40,6 @@ __all__ = [
     "JobType",
     "JobStatus",
     "VoiceProfile",
+    "Website",
+    "WebsiteStatus",
 ]
