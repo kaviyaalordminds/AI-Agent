@@ -9,6 +9,7 @@ from starlette.datastructures import MutableHeaders
 import app.models  # noqa: F401  (registers all ORM models before first use)
 from app.api.agent.router import router as agent_router
 from app.api.auth.router import router as auth_router
+from app.api.deployments.router import router as deployments_router
 from app.api.documents.router import router as documents_router
 from app.api.generation.router import router as generation_router
 from app.api.history.router import router as history_router
@@ -260,6 +261,7 @@ app.include_router(jobs_router, prefix=settings.api_prefix)
 app.include_router(generation_router, prefix=settings.api_prefix)
 app.include_router(system_router, prefix=settings.api_prefix)
 app.include_router(websites_router, prefix=settings.api_prefix)
+app.include_router(deployments_router, prefix=settings.api_prefix)
 
 
 @app.get(f"{settings.api_prefix}/health")

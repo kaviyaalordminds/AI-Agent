@@ -51,7 +51,7 @@ const NAV_STRUCTURE = [
   },
   {
     label: "Deployments",
-    items: [{ key: "deployments", label: "Deployments", icon: "bi-cloud-arrow-up", href: "#", enabled: false }],
+    items: [{ key: "deployments", label: "Deployments", icon: "bi-cloud-arrow-up", href: "deployments.html", enabled: true }],
   },
   {
     label: "Settings",

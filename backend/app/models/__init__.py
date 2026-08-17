@@ -4,6 +4,7 @@ resolved. Import `app.models` once at startup (main.py does this) before
 using the ORM.
 """
 from app.models.conversation import AgentMode, Conversation, Message, MessageRole  # noqa: F401
+from app.models.deployment import Deployment, DeploymentEnvironment, DeploymentStatus  # noqa: F401
 from app.models.document import Document, DocumentFormat, DocumentStatus  # noqa: F401
 from app.models.generation_job import GenerationJob, JobStatus, JobType  # noqa: F401
 from app.models.history import HistoryEntry, HistoryEntryStatus, HistoryEntryType  # noqa: F401
@@ -24,6 +25,9 @@ __all__ = [
     "PasswordResetToken",
     "Project",
     "ProjectStatus",
+    "Deployment",
+    "DeploymentStatus",
+    "DeploymentEnvironment",
     "HistoryEntry",
     "HistoryEntryType",
     "HistoryEntryStatus",

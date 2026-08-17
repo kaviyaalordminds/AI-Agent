@@ -1,0 +1,59 @@
+/* Deployments module — built on the existing theme.css/app.css
+ * primitives (surface, stat-card, badge-pill, btn-brand/btn-ghost,
+ * form-control-premium, empty-state, skeleton) so this page stays
+ * visually consistent with History/Knowledge Center rather than
+ * introducing a new design language. */
+
+.deploy-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.9rem;
+  margin-bottom: 1.25rem;
+}
+.deploy-stat-grid .stat-card { display: flex; flex-direction: column; }
+.deploy-stat-grid .stat-value.text-success { color: var(--success); }
+.deploy-stat-grid .stat-value.text-danger { color: var(--danger); }
+.deploy-stat-grid .stat-value.text-muted { color: var(--text-muted); }
+
+.deploy-columns {
+  display: grid;
+  grid-template-columns: 1.15fr 0.85fr;
+  gap: 1.25rem;
+  align-items: start;
+}
+@media (max-width: 1100px) {
+  .deploy-columns { grid-template-columns: 1fr; }
+}
+
+.deploy-table-row {
+  display: grid;
+  grid-template-columns: 1.8fr 1fr 1fr 1fr auto;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 0.86rem;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+.deploy-table-row:hover { background: var(--bg-surface-alt); }
+.deploy-table-row.active { background: var(--bg-surface-alt); }
+.deploy-table-row.header {
+  font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em;
+  color: var(--text-muted); font-weight: 700;
+  cursor: default;
+}
+.deploy-table-row.header:hover { background: transparent; }
+.deploy-table-row:last-child { border-bottom: none; }
+.deploy-row-name { font-weight: 600; }
+.deploy-row-sub { font-size: 0.74rem; color: var(--text-muted); margin-top: 0.1rem; }
+
+@media (max-width: 900px) {
+  .deploy-table-row { grid-template-columns: 1fr; gap: 0.25rem; }
+  .deploy-table-row.header { display: none; }
+}
+
+.deploy-detail-field { margin-bottom: 0.85rem; }
+.deploy-detail-label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); margin-bottom: 0.25rem; }
+.deploy-detail-value { font-size: 0.88rem; word-break: break-word; }
+.deploy-detail-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 1rem; }

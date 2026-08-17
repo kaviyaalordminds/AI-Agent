@@ -12,6 +12,7 @@ from app.integrations.claude.factory import get_claude_provider
 from app.integrations.deployment.factory import get_deployment_provider
 from app.integrations.generation.errors import GenerationProviderError
 from app.integrations.storage.factory import get_storage_provider
+from app.models.deployment import Deployment
 from app.models.history import HistoryEntry, HistoryEntryStatus, HistoryEntryType
 from app.models.project import Project
 from app.models.user import User
@@ -138,6 +139,14 @@ def delete_website(
         storage_provider.delete(page["storage_ref"])
     if website.deployment_storage_ref:
         storage_provider.delete(website.deployment_storage_ref)
+    # The Deployments module (app/api/deployments/router.py) tracks its
+    # own Deployment rows per website with their own downloadable
+    # archives — the DB foreign key cascade-deletes those rows once the
+    # website is gone, but never touches StorageProvider, so their
+    # archives must be cleaned up here explicitly or they'd be orphaned.
+    for deployment in db.query(Deployment).filter(Deployment.website_id == website.id).all():
+        if deployment.storage_ref:
+            storage_provider.delete(deployment.storage_ref)
     db.delete(website)
     db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
