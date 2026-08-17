@@ -50,6 +50,23 @@ app.add_middleware(
 )
 
 
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    """X-Content-Type-Options: nosniff on every response — a cheap,
+    zero-risk-of-breakage header that stops a browser from ever
+    reinterpreting a served file (a generated image/zip/HTML page, an
+    API JSON response) as a different content type than the one this
+    app explicitly declared via Content-Type. Deliberately not adding
+    X-Frame-Options/frame-ancestors here: the Website Studio preview
+    (GET /api/websites/{id}/preview/{page}) is legitimately framed
+    cross-port by the frontend origin, so a blanket frame-denial would
+    break that real feature rather than harden anything — that iframe
+    is already sandboxed client-side instead (see website-generation.js)."""
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    return response
+
+
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     errors = []

@@ -129,7 +129,7 @@ function renderWebsiteResult(website) {
         <span class="dot"></span><span class="dot"></span><span class="dot"></span>
         <span class="url-bar" id="site-preview-url">${window.GenerationCommon.escapeHtml(firstPath)}</span>
       </div>
-      <iframe id="site-preview-iframe" src="${previewUrl(website.id, firstPath)}" title="Website preview"></iframe>
+      <iframe id="site-preview-iframe" src="${previewUrl(website.id, firstPath)}" title="Website preview" sandbox="allow-scripts"></iframe>
     </div>
     <div id="site-deploy-area"></div>
   `;
