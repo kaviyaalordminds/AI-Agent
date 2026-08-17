@@ -18,7 +18,15 @@ class RQJobQueue(JobQueue):
     same way InProcessJobQueue does for local development."""
 
     def __init__(self, redis_url: str, queue_name: str) -> None:
-        self._queue = Queue(queue_name, connection=Redis.from_url(redis_url))
+        # Explicit connect/read timeouts: without these, an unreachable
+        # or unresponsive Redis (wrong REDIS_URL, host down, firewall
+        # silently dropping packets) can leave submit() hanging far
+        # longer than any caller would expect — create_and_submit_job's
+        # try/except (app/jobs/service.py) already turns a submit()
+        # failure into a clean "failed" job, but only once submit()
+        # actually raises instead of blocking forever.
+        connection = Redis.from_url(redis_url, socket_connect_timeout=5, socket_timeout=5)
+        self._queue = Queue(queue_name, connection=connection)
 
     def submit(self, job_id: uuid.UUID) -> None:
         from app.jobs.rq_worker import run_job_sync

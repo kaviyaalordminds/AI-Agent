@@ -4,6 +4,7 @@ from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from starlette.datastructures import MutableHeaders
 
 import app.models  # noqa: F401  (registers all ORM models before first use)
 from app.api.agent.router import router as agent_router
@@ -34,6 +35,42 @@ app = FastAPI(
     redoc_url="/api/redoc" if not settings.is_production else None,
 )
 
+class SecurityHeadersMiddleware:
+    """Sets X-Content-Type-Options: nosniff on every response.
+
+    Deliberately a raw ASGI middleware, NOT @app.middleware("http")/
+    BaseHTTPMiddleware. BaseHTTPMiddleware wraps every response body
+    through an internal byte-piping/backpressure mechanism (to let the
+    dispatch function inspect and return a *new* response object), which
+    adds real per-request latency and is a well-documented source of
+    slowdowns and hangs on slower or streaming responses (AI Chat's SSE
+    stream in particular) — a request that used to finish just under the
+    frontend's 20s AbortController timeout (see api.js) can tip over it
+    once wrapped, surfacing as a spurious "server took too long" error
+    with no actual backend hang. A pure ASGI middleware that only touches
+    the response-start message's headers (as below) has none of that
+    overhead — this is the same pattern CORSMiddleware already uses,
+    which is why adding CORS never caused this class of problem."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        async def send_wrapper(message):
+            if message["type"] == "http.response.start":
+                headers = MutableHeaders(scope=message)
+                headers.append("X-Content-Type-Options", "nosniff")
+            await send(message)
+
+        await self.app(scope, receive, send_wrapper)
+
+
+app.add_middleware(SecurityHeadersMiddleware)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.resolved_cors_origins,
@@ -48,23 +85,6 @@ app.add_middleware(
     # are allowed, not any actual response data).
     max_age=600,
 )
-
-
-@app.middleware("http")
-async def add_security_headers(request: Request, call_next):
-    """X-Content-Type-Options: nosniff on every response — a cheap,
-    zero-risk-of-breakage header that stops a browser from ever
-    reinterpreting a served file (a generated image/zip/HTML page, an
-    API JSON response) as a different content type than the one this
-    app explicitly declared via Content-Type. Deliberately not adding
-    X-Frame-Options/frame-ancestors here: the Website Studio preview
-    (GET /api/websites/{id}/preview/{page}) is legitimately framed
-    cross-port by the frontend origin, so a blanket frame-denial would
-    break that real feature rather than harden anything — that iframe
-    is already sandboxed client-side instead (see website-generation.js)."""
-    response = await call_next(request)
-    response.headers["X-Content-Type-Options"] = "nosniff"
-    return response
 
 
 @app.exception_handler(RequestValidationError)
