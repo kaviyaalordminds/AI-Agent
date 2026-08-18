@@ -11,6 +11,7 @@ from app.knowledge.gap_analysis import record_unavailable_analysis, run_gap_anal
 from app.knowledge.vault_analysis import analyze_vault, build_knowledge_graph
 from app.models.history import HistoryEntry, HistoryEntryType
 from app.models.knowledge_analysis import KnowledgeAnalysis
+from app.models.knowledge_sync import KnowledgeSync
 from app.models.project import Project
 from app.models.user import User
 from app.schemas.knowledge import (
@@ -18,6 +19,7 @@ from app.schemas.knowledge import (
     KnowledgeAnalysisOut,
     KnowledgeGraphOut,
     KnowledgeHealthOut,
+    KnowledgeSyncOut,
 )
 from app.security.sessions import get_current_user, require_csrf
 
@@ -130,3 +132,23 @@ async def create_gap_analysis(
     obsidian_provider = get_obsidian_provider(user.id)
     analysis = await run_gap_analysis(db, user, project, obsidian_provider, claude_provider, payload.query)
     return _to_analysis_out(analysis)
+
+
+@router.get("/sync-history", response_model=list[KnowledgeSyncOut])
+def list_sync_history(
+    limit: int = Query(default=50, ge=1, le=200),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Audit trail for the automatic Knowledge Maintenance Agent (see
+    app/knowledge/sync_agent.py) — every sync attempt it made against this
+    user's vault, most recent first, whether it created a note, updated
+    one, or skipped (with why)."""
+    rows = (
+        db.query(KnowledgeSync)
+        .filter(KnowledgeSync.user_id == user.id)
+        .order_by(KnowledgeSync.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+    return [KnowledgeSyncOut.model_validate(r) for r in rows]

@@ -28,9 +28,12 @@ from app.database.base import utcnow
 from app.integrations.claude.base import ClaudeMessage, ClaudeProvider
 from app.integrations.claude.errors import ProviderRequestError
 from app.integrations.obsidian.factory import get_obsidian_provider
+from app.knowledge.sync_agent import apply_sync, assess_knowledge_worthiness
 from app.models.conversation import AgentMode, Conversation, Message, MessageRole
 from app.models.history import HistoryEntry, HistoryEntryStatus, HistoryEntryType
+from app.models.knowledge_sync import KnowledgeSyncAction
 from app.models.project import Project
+from app.models.user import User
 
 logger = logging.getLogger("agents.orchestrator")
 
@@ -157,6 +160,57 @@ async def run_chat_turn(
         db.add(conversation)
         _log_history(db, conversation, status=HistoryEntryStatus.completed, user_content=user_content)
         db.commit()
+
+        if conversation.mode == AgentMode.chat:
+            async for sync_event in _maybe_sync_knowledge(db, conversation, provider, user_content):
+                yield sync_event
+
+
+async def _maybe_sync_knowledge(
+    db: Session, conversation: Conversation, claude_provider: ClaudeProvider, user_content: str
+) -> AsyncIterator[dict]:
+    """Runs the Knowledge Maintenance Agent (app/knowledge/sync_agent.py)
+    against the user's own message, best-effort — this is additive to the
+    Casual->Claude / Technical->Obsidian routing above, never a
+    replacement for it, and a failure here degrades to a
+    "sync unavailable" event rather than breaking the chat turn that's
+    already been persisted and shown to the user. Only yields events when
+    a sync is actually attempted (worthiness assessed true) — the
+    "do not sync on every casual chat message" rule means most turns
+    yield nothing here at all, leaving the UI's baseline connection
+    indicator untouched."""
+    try:
+        obsidian_provider = get_obsidian_provider(conversation.user_id)
+    except Exception:
+        logger.exception("Could not construct Obsidian provider for knowledge sync (user %s).", conversation.user_id)
+        return
+
+    try:
+        worthiness = await assess_knowledge_worthiness(claude_provider, user_content)
+    except Exception:
+        logger.exception("Knowledge worthiness assessment crashed for user %s.", conversation.user_id)
+        return
+    if not worthiness.worthy:
+        return
+
+    yield {"type": "sync", "phase": "start"}
+
+    user = db.query(User).filter(User.id == conversation.user_id).first()
+    try:
+        sync_row = await apply_sync(db, user, obsidian_provider, claude_provider, "chat", worthiness)
+    except Exception:
+        logger.exception("Knowledge sync crashed unexpectedly for user %s.", conversation.user_id)
+        yield {"type": "sync", "phase": "done", "result": "unavailable"}
+        return
+
+    if sync_row.action == KnowledgeSyncAction.created:
+        result = "created"
+    elif sync_row.action == KnowledgeSyncAction.updated:
+        result = "updated"
+    else:
+        result = "unavailable" if sync_row.error else "up_to_date"
+
+    yield {"type": "sync", "phase": "done", "result": result, "topic": sync_row.topic, "note_path": sync_row.note_path}
 
 
 def _search_vault_context(user_id, query: str) -> str:

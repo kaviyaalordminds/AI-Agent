@@ -4,6 +4,7 @@ from datetime import datetime
 from pydantic import BaseModel, Field, field_validator
 
 from app.models.knowledge_analysis import KnowledgeAnalysisStatus
+from app.models.knowledge_sync import KnowledgeSyncAction
 
 
 class DuplicatePairOut(BaseModel):
@@ -82,6 +83,19 @@ class KnowledgeAnalysisOut(BaseModel):
     recommended_additions: list[str]
     duplicate_notes: list[str]
     outdated_notes: list[str]
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class KnowledgeSyncOut(BaseModel):
+    id: uuid.UUID
+    source: str
+    topic: str
+    action: KnowledgeSyncAction
+    note_path: str | None
+    description: str
+    error: str | None
     created_at: datetime
 
     model_config = {"from_attributes": True}

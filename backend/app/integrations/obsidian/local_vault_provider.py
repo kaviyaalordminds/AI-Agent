@@ -6,6 +6,7 @@ from pathlib import Path
 from app.integrations.obsidian.base import NoteDetail, NoteMetadata, NoteSummary, ObsidianProvider, VaultStatus
 from app.integrations.obsidian.errors import InvalidNotePathError, NoteAlreadyExistsError, NoteNotFoundError
 from app.integrations.obsidian.parsing import derive_excerpt, derive_title, extract_links, extract_tags
+from app.integrations.obsidian.vault_identity import verify_vault_id
 
 logger = logging.getLogger("integrations.obsidian")
 
@@ -54,6 +55,43 @@ _STOPWORDS = {
 }
 
 
+def validate_obsidian_path(vault_root: Path, target_path: str, *, must_exist: bool | None = None) -> Path:
+    """The single, backend-enforced guard against writing outside the
+    configured Obsidian vault. Every note read/write in this module funnels
+    through here — never trust a path handed in from a request body or the
+    frontend; this always re-resolves it against `vault_root` and rejects
+    anything that isn't a real descendant of it (absolute paths, drive
+    letters, home-relative '~', and '..' traversal segments included), so a
+    frontend-supplied path can never point outside the vault regardless of
+    what the caller sends.
+
+    Raises InvalidNotePathError for anything invalid/escaping;
+    NoteNotFoundError / NoteAlreadyExistsError when `must_exist` is given
+    and the resolved file's existence doesn't match it.
+    """
+    if not target_path or not target_path.strip():
+        raise InvalidNotePathError("Note path is required.")
+    normalized = target_path.strip().replace("\\", "/")
+    if normalized.startswith("/") or normalized.startswith("~") or ":" in normalized:
+        raise InvalidNotePathError("Note path must be relative to the vault.")
+    if not normalized.endswith(".md"):
+        raise InvalidNotePathError("Note path must end in .md")
+    parts = normalized.split("/")
+    if any(p in ("", ".", "..") for p in parts):
+        raise InvalidNotePathError("Note path may not contain '..' or empty segments.")
+
+    vault_root = vault_root.resolve()
+    resolved = (vault_root / normalized).resolve()
+    if resolved != vault_root and vault_root not in resolved.parents:
+        raise InvalidNotePathError("Note path escapes the vault.")
+
+    if must_exist is True and not resolved.is_file():
+        raise NoteNotFoundError(f"No note at '{target_path}'.")
+    if must_exist is False and resolved.exists():
+        raise NoteAlreadyExistsError(f"A note already exists at '{target_path}'.")
+    return resolved
+
+
 def provision_vault(root: Path) -> None:
     root.mkdir(parents=True, exist_ok=True)
     for folder in DEFAULT_FOLDERS:
@@ -69,30 +107,12 @@ class LocalVaultProvider(ObsidianProvider):
     files, and this is a genuine implementation of vault operations, not a
     mock standing in for one."""
 
-    def __init__(self, root: Path) -> None:
+    def __init__(self, root: Path, vault_id: str | None = None) -> None:
         self.root = root.resolve()
+        self.vault_id = vault_id
 
     def _resolve(self, path: str, must_exist: bool | None = None) -> Path:
-        if not path or not path.strip():
-            raise InvalidNotePathError("Note path is required.")
-        normalized = path.strip().replace("\\", "/")
-        if normalized.startswith("/") or normalized.startswith("~") or ":" in normalized:
-            raise InvalidNotePathError("Note path must be relative to the vault.")
-        if not normalized.endswith(".md"):
-            raise InvalidNotePathError("Note path must end in .md")
-        parts = normalized.split("/")
-        if any(p in ("", ".", "..") for p in parts):
-            raise InvalidNotePathError("Note path may not contain '..' or empty segments.")
-
-        resolved = (self.root / normalized).resolve()
-        if resolved != self.root and self.root not in resolved.parents:
-            raise InvalidNotePathError("Note path escapes the vault.")
-
-        if must_exist is True and not resolved.is_file():
-            raise NoteNotFoundError(f"No note at '{path}'.")
-        if must_exist is False and resolved.exists():
-            raise NoteAlreadyExistsError(f"A note already exists at '{path}'.")
-        return resolved
+        return validate_obsidian_path(self.root, path, must_exist=must_exist)
 
     def _to_summary(self, file_path: Path) -> NoteSummary:
         rel = file_path.relative_to(self.root).as_posix()
@@ -142,6 +162,14 @@ class LocalVaultProvider(ObsidianProvider):
             note_count = 0
             connected = False
             detail = f"Vault path is not accessible: {exc}"
+
+        vault_id_check = None
+        vault_id_detail = None
+        if self.vault_id:
+            check = verify_vault_id(self.vault_id, self.root)
+            vault_id_check = check.status
+            vault_id_detail = check.detail
+
         return VaultStatus(
             configured=True,
             connected=connected,
@@ -150,6 +178,9 @@ class LocalVaultProvider(ObsidianProvider):
             note_count=note_count,
             detail=detail,
             folders=DEFAULT_FOLDERS,
+            vault_id=self.vault_id,
+            vault_id_check=vault_id_check,
+            vault_id_detail=vault_id_detail,
         )
 
     def list_notes(self, folder: str | None = None) -> list[NoteSummary]:

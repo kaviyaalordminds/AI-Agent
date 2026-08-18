@@ -3,6 +3,9 @@ import json
 from app.agents.classifier import CLASSIFIER_SYSTEM_PROMPT
 from app.integrations.claude.base import ClaudeMessage, ClaudeProvider, ProviderStatus
 from app.integrations.claude.errors import ProviderRequestError
+from app.knowledge.sync_agent import _MERGE_SYSTEM_PROMPT, _NEW_NOTE_SYSTEM_PROMPT, _WORTHINESS_SYSTEM_PROMPT
+
+_SYNC_AGENT_PROMPTS = {_WORTHINESS_SYSTEM_PROMPT, _MERGE_SYSTEM_PROMPT, _NEW_NOTE_SYSTEM_PROMPT}
 
 
 class _FakeProvider(ClaudeProvider):
@@ -17,17 +20,34 @@ class _FakeProvider(ClaudeProvider):
     "just answer normally" behavior) without consuming `chunks` — existing
     tests that don't care about routing don't need to change at all.
     Pass a different `classification` JSON string to test routing
-    behavior specifically."""
+    behavior specifically.
+
+    Every successful chat-mode turn also runs the Knowledge Maintenance
+    Agent (see app/knowledge/sync_agent.py) against the user's message
+    AFTER the real answer — those calls are similarly special-cased here
+    (defaulting worthy=false, i.e. "never sync") so they don't disturb
+    `call_count`/`received_messages`/`received_system_prompt`, which every
+    pre-existing test asserts reflects the real answer call specifically.
+    Tests that want to exercise sync behavior should set
+    `sync_worthiness`/`sync_merge_result`/`sync_new_note_content` and read
+    `sync_calls` (a list of (system_prompt, message) tuples) instead."""
 
     def __init__(
         self,
         chunks: list[str],
         fail_after: int | None = None,
         classification: str = '{"intent": "casual", "language": "english"}',
+        sync_worthiness: str = '{"worthy": false}',
+        sync_merge_result: str = "SKIP",
+        sync_new_note_content: str = "# Note\n\nContent.",
     ):
         self.chunks = chunks
         self.fail_after = fail_after
         self.classification = classification
+        self.sync_worthiness = sync_worthiness
+        self.sync_merge_result = sync_merge_result
+        self.sync_new_note_content = sync_new_note_content
+        self.sync_calls: list[tuple[str, str]] = []
         self.received_messages: list[ClaudeMessage] | None = None
         self.received_system_prompt: str | None = None
         self.call_count = 0
@@ -36,12 +56,24 @@ class _FakeProvider(ClaudeProvider):
         return ProviderStatus(configured=True, provider="fake", model="fake-model", detail="ok")
 
     async def stream(self, messages, system_prompt):
+        if system_prompt == CLASSIFIER_SYSTEM_PROMPT:
+            self.call_count += 1
+            self.received_messages = messages
+            self.received_system_prompt = system_prompt
+            yield self.classification
+            return
+        if system_prompt in _SYNC_AGENT_PROMPTS:
+            self.sync_calls.append((system_prompt, messages[-1].content))
+            if system_prompt == _WORTHINESS_SYSTEM_PROMPT:
+                yield self.sync_worthiness
+            elif system_prompt == _MERGE_SYSTEM_PROMPT:
+                yield self.sync_merge_result
+            else:
+                yield self.sync_new_note_content
+            return
         self.call_count += 1
         self.received_messages = messages
         self.received_system_prompt = system_prompt
-        if system_prompt == CLASSIFIER_SYSTEM_PROMPT:
-            yield self.classification
-            return
         for i, chunk in enumerate(self.chunks):
             if self.fail_after is not None and i == self.fail_after:
                 raise ProviderRequestError("simulated upstream failure")
@@ -654,3 +686,112 @@ class TestChatRouting:
         events = _parse_sse(resp.text)
         route_event = next(e for e in events if e["type"] == "route")
         assert route_event["intent"] == "technical"
+
+
+class TestKnowledgeSyncWiring:
+    """The Knowledge Maintenance Agent (app/knowledge/sync_agent.py) runs
+    automatically after every chat-mode turn, additive to (never replacing)
+    the Casual->Claude / Technical->Obsidian routing tested above."""
+
+    def test_worthy_message_emits_sync_events_and_creates_note(self, auth_client, monkeypatch):
+        client, csrf = auth_client
+        conv = client.post(
+            "/api/agent/conversations", json={"mode": "chat"}, headers={"X-CSRF-Token": csrf}
+        ).json()
+
+        fake = _FakeProvider(
+            chunks=["Got it, I'll remember that."],
+            sync_worthiness='{"worthy": true, "topic": "Manufacturing HRMS", "summary": "Payroll must run monthly."}',
+            sync_new_note_content="# Manufacturing HRMS\n\nPayroll must run monthly.",
+        )
+        _patch_provider(monkeypatch, fake)
+
+        resp = client.post(
+            f"/api/agent/conversations/{conv['id']}/messages",
+            json={"content": "For this project, the HRMS payroll module must run monthly, not weekly."},
+            headers={"X-CSRF-Token": csrf},
+        )
+        assert resp.status_code == 200
+        events = _parse_sse(resp.text)
+        sync_events = [e for e in events if e["type"] == "sync"]
+        assert [e["phase"] for e in sync_events] == ["start", "done"]
+        assert sync_events[1]["result"] == "created"
+        assert sync_events[1]["topic"] == "Manufacturing HRMS"
+
+        history = client.get("/api/knowledge/sync-history").json()
+        assert len(history) == 1
+        assert history[0]["action"] == "created"
+        assert history[0]["topic"] == "Manufacturing HRMS"
+
+        notes = client.get("/api/obsidian/notes").json()
+        assert any(n["title"] == "Manufacturing HRMS" for n in notes)
+
+    def test_casual_message_never_triggers_sync(self, auth_client, monkeypatch):
+        client, csrf = auth_client
+        conv = client.post(
+            "/api/agent/conversations", json={"mode": "chat"}, headers={"X-CSRF-Token": csrf}
+        ).json()
+
+        fake = _FakeProvider(chunks=["Hi there!"])  # default sync_worthiness is worthy=false
+        _patch_provider(monkeypatch, fake)
+
+        resp = client.post(
+            f"/api/agent/conversations/{conv['id']}/messages",
+            json={"content": "Hi, how are you?"},
+            headers={"X-CSRF-Token": csrf},
+        )
+        events = _parse_sse(resp.text)
+        assert not any(e["type"] == "sync" for e in events)
+        assert client.get("/api/knowledge/sync-history").json() == []
+
+    def test_non_chat_mode_never_triggers_sync(self, auth_client, monkeypatch):
+        client, csrf = auth_client
+        conv = client.post(
+            "/api/agent/conversations", json={"mode": "project"}, headers={"X-CSRF-Token": csrf}
+        ).json()
+
+        fake = _FakeProvider(
+            chunks=["OK"],
+            sync_worthiness='{"worthy": true, "topic": "Should never run", "summary": "n/a"}',
+        )
+        _patch_provider(monkeypatch, fake)
+
+        resp = client.post(
+            f"/api/agent/conversations/{conv['id']}/messages",
+            json={"content": "Some project message that would otherwise be worthy."},
+            headers={"X-CSRF-Token": csrf},
+        )
+        events = _parse_sse(resp.text)
+        assert not any(e["type"] == "sync" for e in events)
+        assert fake.sync_calls == []
+        assert client.get("/api/knowledge/sync-history").json() == []
+
+    def test_sync_failure_reports_unavailable_without_breaking_chat_reply(self, auth_client, monkeypatch):
+        import app.agents.orchestrator as orchestrator_module
+
+        client, csrf = auth_client
+        conv = client.post(
+            "/api/agent/conversations", json={"mode": "chat"}, headers={"X-CSRF-Token": csrf}
+        ).json()
+
+        def _broken_provider(user_id):
+            raise RuntimeError("vault is unreachable")
+
+        monkeypatch.setattr(orchestrator_module, "get_obsidian_provider", _broken_provider)
+
+        fake = _FakeProvider(chunks=["Sure, no problem."])
+        _patch_provider(monkeypatch, fake)
+
+        resp = client.post(
+            f"/api/agent/conversations/{conv['id']}/messages",
+            json={"content": "Hi"},
+            headers={"X-CSRF-Token": csrf},
+        )
+        assert resp.status_code == 200
+        events = _parse_sse(resp.text)
+        # The chat reply itself must still succeed even though the vault
+        # (and therefore any sync) is unreachable -- and since the vault
+        # provider itself couldn't even be constructed, no sync is
+        # attempted at all (no worthiness call was possible).
+        assert any(e["type"] == "delta" for e in events)
+        assert not any(e["type"] == "sync" for e in events)

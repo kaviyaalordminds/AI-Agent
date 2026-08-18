@@ -42,6 +42,14 @@ class VaultStatus:
     note_count: int
     detail: str
     folders: list[str] = field(default_factory=list)
+    # Optional OBSIDIAN_VAULT_ID cross-check (see
+    # app/integrations/obsidian/vault_identity.py) — vault_id is only
+    # populated when OBSIDIAN_VAULT_ID is configured; vault_id_check is
+    # "verified" | "mismatch" | "unverifiable" and vault_id_detail explains
+    # why. None/None/None when no vault id is configured at all.
+    vault_id: str | None = None
+    vault_id_check: str | None = None
+    vault_id_detail: str | None = None
 
 
 @dataclass

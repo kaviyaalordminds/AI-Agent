@@ -9,6 +9,7 @@ from app.models.document import Document, DocumentFormat, DocumentStatus  # noqa
 from app.models.generation_job import GenerationJob, JobStatus, JobType  # noqa: F401
 from app.models.history import HistoryEntry, HistoryEntryStatus, HistoryEntryType  # noqa: F401
 from app.models.knowledge_analysis import KnowledgeAnalysis, KnowledgeAnalysisStatus  # noqa: F401
+from app.models.knowledge_sync import KnowledgeSync, KnowledgeSyncAction  # noqa: F401
 from app.models.project import Project, ProjectStatus  # noqa: F401
 from app.models.session import UserSession  # noqa: F401
 from app.models.token import EmailVerificationToken, PasswordResetToken  # noqa: F401
@@ -37,6 +38,8 @@ __all__ = [
     "MessageRole",
     "KnowledgeAnalysis",
     "KnowledgeAnalysisStatus",
+    "KnowledgeSync",
+    "KnowledgeSyncAction",
     "Document",
     "DocumentFormat",
     "DocumentStatus",

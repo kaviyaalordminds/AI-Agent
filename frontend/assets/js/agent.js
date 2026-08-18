@@ -72,6 +72,52 @@ async function loadStatus() {
   }
 }
 
+let knowledgeSyncRevertTimer = null;
+
+function setKnowledgeSyncBadge(text, variant) {
+  const badge = document.getElementById("knowledge-sync-badge");
+  if (!badge) return;
+  badge.className = `badge-pill badge-${variant}`;
+  const dotClass = variant === "success" ? "dot-success" : variant === "danger" ? "dot-danger" : "dot-muted";
+  badge.innerHTML = `<span class="dot ${dotClass}"></span> Knowledge Sync: ${text}`;
+}
+
+async function loadKnowledgeSyncBaseline() {
+  try {
+    const status = await window.AIAgentApi.get("/obsidian/status");
+    if (status.connected) {
+      setKnowledgeSyncBadge("● Connected", "success");
+    } else {
+      setKnowledgeSyncBadge("⚠ Obsidian unavailable", "danger");
+    }
+  } catch {
+    setKnowledgeSyncBadge("⚠ Obsidian unavailable", "danger");
+  }
+}
+
+function handleKnowledgeSyncEvent(evt) {
+  if (knowledgeSyncRevertTimer) {
+    clearTimeout(knowledgeSyncRevertTimer);
+    knowledgeSyncRevertTimer = null;
+  }
+  if (evt.phase === "start") {
+    setKnowledgeSyncBadge("Updating Obsidian…", "muted");
+    return;
+  }
+  // phase === "done"
+  const labels = {
+    created: "✓ Updated",
+    updated: "✓ Updated",
+    up_to_date: "✓ Knowledge already up to date",
+    unavailable: "⚠ Obsidian unavailable",
+  };
+  const variant = evt.result === "unavailable" ? "danger" : "success";
+  setKnowledgeSyncBadge(labels[evt.result] || "✓ Knowledge already up to date", variant);
+  // Revert to the baseline connection indicator a few seconds later so the
+  // badge doesn't permanently claim "just updated" long after the fact.
+  knowledgeSyncRevertTimer = setTimeout(loadKnowledgeSyncBaseline, 5000);
+}
+
 function renderModePicker(container, { onSelect, selected = "chat" } = {}) {
   container.innerHTML = MODES.map(
     (m) => `<button type="button" class="mode-pill ${m.key === selected ? "active" : ""}" data-mode="${m.key}"><i class="bi ${m.icon}"></i> ${m.label}</button>`
@@ -458,6 +504,8 @@ async function sendMessage() {
         } else if (evt.type === "error") {
           bubble.classList.add("error-bubble");
           bubble.innerHTML = `${agentEscapeHtml(assistantText)}<span class="msg-error-note"><i class="bi bi-exclamation-triangle"></i> ${agentEscapeHtml(evt.message)}</span>`;
+        } else if (evt.type === "sync") {
+          handleKnowledgeSyncEvent(evt);
         }
       }
     }
@@ -575,6 +623,7 @@ async function init() {
   });
 
   await loadStatus();
+  loadKnowledgeSyncBaseline();
   await loadConversations();
 
   const params = new URLSearchParams(window.location.search);

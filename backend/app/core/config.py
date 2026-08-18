@@ -156,6 +156,21 @@ class Settings(BaseSettings):
     # — do not set this on a backend shared by more than one real user.
     # Leave unset (default) to keep the isolated-per-user architecture.
     obsidian_vault_path: str | None = None
+    # Optional, purely informational identifier for the vault pointed at by
+    # obsidian_vault_path — this is the same id Obsidian itself assigns a
+    # vault the first time it's opened in the Obsidian app (visible in
+    # Obsidian's own vault switcher / obsidian.json), not something this
+    # backend invents. It is NOT used to locate or open the vault — the
+    # filesystem path (obsidian_vault_path) is what every read/write
+    # actually uses — but when the Obsidian desktop app's own config file
+    # is readable on this machine, get_obsidian_provider() cross-checks
+    # this id against it and surfaces a mismatch warning in the vault
+    # status (see app/integrations/obsidian/vault_identity.py), so a
+    # misconfigured path is caught rather than silently reading/writing
+    # the wrong folder. When that file isn't reachable (e.g. this backend
+    # runs somewhere other than the machine Obsidian is installed on) the
+    # check is honestly reported as unverifiable, never as "verified".
+    obsidian_vault_id: str | None = None
 
     # --- Audio / Transcription / Image / Video / Voice providers ---
     # Each is architected as interface + local/cloud factory + honest
