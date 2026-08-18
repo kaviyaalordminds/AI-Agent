@@ -79,14 +79,51 @@ _MODE_PROMPTS: dict[AgentMode, str] = {
 
 VAULT_SEARCH_MODES = {AgentMode.knowledge, AgentMode.research}
 
+_LANGUAGE_LABELS = {"tamil": "Tamil", "tanglish": "Tamil-English (\"Tanglish\")"}
+
+# Used only in Chat mode when the query router (app/agents/classifier.py)
+# classifies a message as "technical" — replaces the normal Chat persona
+# entirely rather than layering on top of it, because the whole point is
+# that Claude must not answer from its own general/training knowledge
+# here, only from the vault_context block appended below by
+# build_system_prompt. See app/agents/orchestrator.py's run_chat_turn.
+_GROUNDED_TECHNICAL_PROMPT = (
+    f"{_BASE}\n\nMode: Chat — grounded knowledge-base answer. The user's "
+    "message was classified as a technical/knowledge question, so this "
+    "reply must be generated ENTIRELY from the notes retrieved from "
+    "their Obsidian vault below — never from your own general or "
+    "training knowledge, even if you already know the answer. If the "
+    "notes below don't actually contain the answer, say plainly: "
+    "\"I couldn't find this information in your knowledge base.\" Do "
+    "not guess, do not fill gaps with outside knowledge, and do not "
+    "pretend the vault contains something it doesn't. When you do "
+    "answer from the notes, cite which note(s) you drew from by title."
+)
+
 
 def build_system_prompt(
     mode: AgentMode,
     project: Project | None,
     vault_context: str | None = None,
     project_activity: str | None = None,
+    *,
+    grounded: bool = False,
+    language: str | None = None,
 ) -> str:
-    prompt = _MODE_PROMPTS[mode]
+    """`grounded`/`language` are only ever set by run_chat_turn's routing
+    layer for AgentMode.chat (see classifier.py) — every other mode calls
+    this exactly as before, with both left at their defaults."""
+    if grounded:
+        prompt = _GROUNDED_TECHNICAL_PROMPT
+    else:
+        prompt = _MODE_PROMPTS[mode]
+        if language in _LANGUAGE_LABELS:
+            prompt += (
+                f"\n\nThe user's message appears to be in {_LANGUAGE_LABELS[language]}. "
+                "Respond naturally in that same language/style — mixing in English "
+                "technical terms where that reads naturally, the way the user themselves "
+                "did — rather than forcing a full translation into plain English."
+            )
     if project is not None:
         project_context = f"\n\nCurrent project: \"{project.name}\"."
         if project.description:

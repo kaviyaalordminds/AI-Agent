@@ -15,6 +15,20 @@ let newChatModal;
 let userProjects = [];
 let defaultMode = "chat";
 
+// --- Voice input (speech-to-text) + output (text-to-speech) state ---
+// Both use the browser's native Web Speech API (SpeechRecognition /
+// speechSynthesis) — no backend involved, no new dependency, and no
+// vendor cost: this is deliberately NOT the same pipeline as the
+// separate Audio Generation studio (which produces downloadable files
+// via a job queue over a few seconds — too slow for "click to hear this
+// chat message instantly").
+let speechRecognition = null;
+let isRecording = false;
+let currentSpeakerBtn = null;
+
+const VOICE_LANG_STORAGE_KEY = "aiagent:chat-voice-language";
+const AUTO_SPEAK_STORAGE_KEY = "aiagent:chat-auto-speak";
+
 function agentEscapeHtml(str) {
   const div = document.createElement("div");
   div.textContent = str;
@@ -141,18 +155,206 @@ async function loadConversations() {
   }
 }
 
-function renderMessageRow(role, content, { error = null, id = null } = {}) {
+function renderMessageRow(role, content, { error = null, id = null, getLanguage = null } = {}) {
   const row = document.createElement("div");
   row.className = `msg-row ${role}`;
   if (id) row.dataset.messageId = id;
   const avatarIcon = role === "user" ? "bi-person" : "bi-stars";
+  const showSpeaker = role === "assistant" && !error;
   row.innerHTML = `
     <div class="msg-avatar"><i class="bi ${avatarIcon}"></i></div>
-    <div class="msg-bubble ${error ? "error-bubble" : ""}">${content}</div>`;
+    <div class="msg-bubble-wrap">
+      <div class="route-badge-slot"></div>
+      <div class="msg-bubble ${error ? "error-bubble" : ""}">${content}</div>
+      <div class="sources-slot"></div>
+      ${showSpeaker ? `<div class="msg-bubble-actions"><button type="button" class="speaker-btn" title="Read aloud" aria-label="Read message aloud"><i class="bi bi-volume-up"></i></button></div>` : ""}
+    </div>`;
+  if (showSpeaker) wireSpeakerButton(row, getLanguage);
   return row;
 }
 
+// getLanguage is a closure so a live (still-streaming) message picks up
+// its routing language once the "route" SSE event arrives, even though
+// the button itself was created before that event landed.
+function wireSpeakerButton(row, getLanguage) {
+  const btn = row.querySelector(".speaker-btn");
+  if (!btn) return;
+  btn.addEventListener("click", () => {
+    const bubble = row.querySelector(".msg-bubble");
+    const text = bubble.textContent.trim();
+    if (!text) return;
+    speakText(text, getLanguage ? getLanguage() : "english", btn);
+  });
+}
+
+// --- Voice output (speaker button / Auto Speak) ---
+
+function pickVoiceForLanguage(language) {
+  const voices = window.speechSynthesis.getVoices();
+  if (!voices.length) return null;
+  if (language === "tamil" || language === "tanglish") {
+    return voices.find((v) => v.lang && v.lang.toLowerCase().startsWith("ta")) || null;
+  }
+  return voices.find((v) => v.lang && v.lang.toLowerCase().startsWith("en")) || null;
+}
+
+function stopSpeaking() {
+  if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+  if (currentSpeakerBtn) {
+    currentSpeakerBtn.classList.remove("speaking");
+    const icon = currentSpeakerBtn.querySelector("i");
+    if (icon) icon.className = "bi bi-volume-up";
+  }
+  currentSpeakerBtn = null;
+}
+
+function speakText(text, language, btn) {
+  if (!("speechSynthesis" in window) || typeof SpeechSynthesisUtterance === "undefined") {
+    window.AIAgentToast.show("Voice playback is not supported in this browser.", "error");
+    return;
+  }
+  const wasSpeakingThisButton = currentSpeakerBtn === btn;
+  stopSpeaking();
+  if (wasSpeakingThisButton) return; // clicking the active speaker again just stops it
+
+  const utterance = new SpeechSynthesisUtterance(text);
+  const voice = pickVoiceForLanguage(language);
+  if (voice) utterance.voice = voice;
+
+  utterance.onstart = () => {
+    btn.classList.add("speaking");
+    btn.querySelector("i").className = "bi bi-volume-up-fill";
+  };
+  const reset = () => {
+    btn.classList.remove("speaking");
+    const icon = btn.querySelector("i");
+    if (icon) icon.className = "bi bi-volume-up";
+    if (currentSpeakerBtn === btn) currentSpeakerBtn = null;
+  };
+  utterance.onend = reset;
+  utterance.onerror = (e) => {
+    // Chrome fires an "interrupted"/"canceled" error whenever a new
+    // utterance preempts this one (e.g. the user clicked a different
+    // speaker button) — that's expected, not a real playback failure,
+    // so only surface a toast for genuine errors.
+    if (e.error !== "interrupted" && e.error !== "canceled") {
+      window.AIAgentToast.show("Could not play audio for this message.", "error");
+    }
+    reset();
+  };
+
+  currentSpeakerBtn = btn;
+  window.speechSynthesis.speak(utterance);
+}
+
+// --- Voice input (microphone -> speech recognition) ---
+
+function getRecognitionLang() {
+  const selected = document.getElementById("voice-language-select").value;
+  // The Web Speech API has no real "auto-detect language" mode (that's
+  // a genuine browser limitation, not something this app can add) —
+  // "Auto Detect" and "Tanglish" both fall back to the closest available
+  // recognition locale; the resulting TEXT still goes through the same
+  // backend language-aware routing/response logic regardless of which
+  // locale recognized it.
+  if (selected === "auto") return "en-US";
+  if (selected === "tanglish") return "en-IN";
+  return selected; // "en-US" or "ta-IN"
+}
+
+function initVoiceInput() {
+  const micBtn = document.getElementById("mic-btn");
+  const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognitionCtor) {
+    micBtn.disabled = true;
+    micBtn.title = "Voice input is not supported in this browser.";
+    return;
+  }
+
+  micBtn.addEventListener("click", () => {
+    if (isRecording) {
+      speechRecognition.stop();
+      return;
+    }
+    startRecording(SpeechRecognitionCtor);
+  });
+}
+
+function startRecording(SpeechRecognitionCtor) {
+  const micBtn = document.getElementById("mic-btn");
+  const indicator = document.getElementById("listening-indicator");
+
+  speechRecognition = new SpeechRecognitionCtor();
+  speechRecognition.lang = getRecognitionLang();
+  speechRecognition.interimResults = false;
+  speechRecognition.maxAlternatives = 1;
+
+  speechRecognition.onstart = () => {
+    isRecording = true;
+    micBtn.classList.add("recording");
+    micBtn.querySelector("i").className = "bi bi-mic-fill";
+    indicator.classList.remove("d-none");
+  };
+
+  speechRecognition.onresult = (event) => {
+    const transcript = (event.results[0] && event.results[0][0] && event.results[0][0].transcript || "").trim();
+    if (!transcript) {
+      window.AIAgentToast.show("No speech was detected. Please try again.", "error");
+      return;
+    }
+    const input = document.getElementById("composer-input");
+    input.value = input.value ? `${input.value} ${transcript}` : transcript;
+    autoGrowTextarea(input);
+    input.focus();
+  };
+
+  speechRecognition.onerror = (event) => {
+    const messages = {
+      "not-allowed": "Microphone permission was denied. Allow microphone access in your browser to use voice input.",
+      "service-not-allowed": "Microphone permission was denied. Allow microphone access in your browser to use voice input.",
+      "no-speech": "No speech was detected. Please try again.",
+      "audio-capture": "No microphone was found on this device.",
+      "network": "A network error interrupted speech recognition.",
+    };
+    window.AIAgentToast.show(messages[event.error] || "Voice input failed. Please try again.", "error");
+  };
+
+  speechRecognition.onend = () => {
+    isRecording = false;
+    micBtn.classList.remove("recording");
+    micBtn.querySelector("i").className = "bi bi-mic";
+    indicator.classList.add("d-none");
+  };
+
+  try {
+    speechRecognition.start();
+  } catch (err) {
+    console.error("[agent] Could not start voice input:", err);
+    window.AIAgentToast.show("Could not start voice input.", "error");
+  }
+}
+
+function initVoiceSettings() {
+  const langSelect = document.getElementById("voice-language-select");
+  const autoSpeakToggle = document.getElementById("auto-speak-toggle");
+
+  const savedLang = localStorage.getItem(VOICE_LANG_STORAGE_KEY);
+  if (savedLang) langSelect.value = savedLang;
+  langSelect.addEventListener("change", () => {
+    localStorage.setItem(VOICE_LANG_STORAGE_KEY, langSelect.value);
+  });
+
+  autoSpeakToggle.checked = localStorage.getItem(AUTO_SPEAK_STORAGE_KEY) === "1";
+  autoSpeakToggle.addEventListener("change", () => {
+    localStorage.setItem(AUTO_SPEAK_STORAGE_KEY, autoSpeakToggle.checked ? "1" : "0");
+    if (!autoSpeakToggle.checked) stopSpeaking();
+  });
+
+  initVoiceInput();
+}
+
 async function selectConversation(id) {
+  stopSpeaking();
   activeConversationId = id;
   document.getElementById("thread-empty-state").classList.add("d-none");
   document.getElementById("thread-active").classList.remove("d-none");
@@ -185,6 +387,7 @@ async function sendMessage() {
   const content = input.value.trim();
   if (!content || isStreaming || !activeConversationId) return;
 
+  stopSpeaking();
   input.value = "";
   autoGrowTextarea(input);
   isStreaming = true;
@@ -193,9 +396,11 @@ async function sendMessage() {
   const thread = document.getElementById("agent-thread");
   thread.appendChild(renderMessageRow("user", agentEscapeHtml(content)));
 
+  let routingLanguage = "english";
   const assistantRow = renderMessageRow(
     "assistant",
-    '<span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span>'
+    '<span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span>',
+    { getLanguage: () => routingLanguage }
   );
   thread.appendChild(assistantRow);
   thread.scrollTop = thread.scrollHeight;
@@ -231,7 +436,18 @@ async function sendMessage() {
         if (!rawEvent.startsWith("data: ")) continue;
         const evt = JSON.parse(rawEvent.slice(6));
 
-        if (evt.type === "delta") {
+        if (evt.type === "route") {
+          routingLanguage = evt.language || "english";
+          if (evt.intent === "technical") {
+            assistantRow.querySelector(".route-badge-slot").innerHTML =
+              `<span class="route-badge technical"><i class="bi bi-search"></i> From your knowledge base</span>`;
+            if (evt.sources && evt.sources.length) {
+              assistantRow.querySelector(".sources-slot").innerHTML = `<div class="msg-sources">Sources: ${evt.sources
+                .map((s) => `<span class="source-chip"><i class="bi bi-file-earmark-text"></i> ${agentEscapeHtml(s.title)}</span>`)
+                .join("")}</div>`;
+            }
+          }
+        } else if (evt.type === "delta") {
           if (!sawFirstDelta) {
             bubble.innerHTML = "";
             sawFirstDelta = true;
@@ -246,6 +462,11 @@ async function sendMessage() {
       }
     }
     loadConversations();
+
+    if (assistantText && document.getElementById("auto-speak-toggle").checked) {
+      const speakerBtn = assistantRow.querySelector(".speaker-btn");
+      if (speakerBtn) speakText(assistantText, routingLanguage, speakerBtn);
+    }
   } catch (err) {
     bubble.classList.add("error-bubble");
     bubble.textContent = err.message;
@@ -347,6 +568,7 @@ async function init() {
 
   initComposer();
   initNewChatModal();
+  initVoiceSettings();
 
   document.getElementById("mobile-conv-toggle").addEventListener("click", () => {
     document.getElementById("agent-conv-list").classList.toggle("mobile-open");

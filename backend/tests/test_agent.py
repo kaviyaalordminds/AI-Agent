@@ -1,5 +1,6 @@
 import json
 
+from app.agents.classifier import CLASSIFIER_SYSTEM_PROMPT
 from app.integrations.claude.base import ClaudeMessage, ClaudeProvider, ProviderStatus
 from app.integrations.claude.errors import ProviderRequestError
 
@@ -7,20 +8,40 @@ from app.integrations.claude.errors import ProviderRequestError
 class _FakeProvider(ClaudeProvider):
     """Deterministic stand-in for a real Claude API call, used to test the
     orchestrator/streaming/persistence pipeline without network access or
-    a real API key."""
+    a real API key.
 
-    def __init__(self, chunks: list[str], fail_after: int | None = None):
+    AgentMode.chat now runs a classification call (see
+    app/agents/classifier.py) before the real answer call, so this fake
+    transparently auto-answers any classification request with
+    `classification` (defaulting to casual/english, i.e. the old
+    "just answer normally" behavior) without consuming `chunks` — existing
+    tests that don't care about routing don't need to change at all.
+    Pass a different `classification` JSON string to test routing
+    behavior specifically."""
+
+    def __init__(
+        self,
+        chunks: list[str],
+        fail_after: int | None = None,
+        classification: str = '{"intent": "casual", "language": "english"}',
+    ):
         self.chunks = chunks
         self.fail_after = fail_after
+        self.classification = classification
         self.received_messages: list[ClaudeMessage] | None = None
         self.received_system_prompt: str | None = None
+        self.call_count = 0
 
     def status(self) -> ProviderStatus:
         return ProviderStatus(configured=True, provider="fake", model="fake-model", detail="ok")
 
     async def stream(self, messages, system_prompt):
+        self.call_count += 1
         self.received_messages = messages
         self.received_system_prompt = system_prompt
+        if system_prompt == CLASSIFIER_SYSTEM_PROMPT:
+            yield self.classification
+            return
         for i, chunk in enumerate(self.chunks):
             if self.fail_after is not None and i == self.fail_after:
                 raise ProviderRequestError("simulated upstream failure")
@@ -436,3 +457,200 @@ class TestSendMessage:
             headers={"X-CSRF-Token": second_csrf},
         )
         assert resp.status_code == 404
+
+
+class TestChatRouting:
+    """AgentMode.chat's routing layer (app/agents/classifier.py +
+    orchestrator.run_chat_turn): casual messages go straight to Claude's
+    normal persona; technical/knowledge messages are forced through a
+    strict grounded-RAG persona that may only answer from the user's
+    Obsidian vault. Every other mode's existing behavior must stay
+    completely untouched (see test_non_chat_modes_are_not_classified)."""
+
+    def test_casual_message_skips_vault_search_entirely(self, auth_client, monkeypatch):
+        import app.agents.orchestrator as orchestrator_module
+
+        client, csrf = auth_client
+        conv = client.post(
+            "/api/agent/conversations", json={"mode": "chat"}, headers={"X-CSRF-Token": csrf}
+        ).json()
+
+        def _fail_if_called(user_id):
+            raise AssertionError("Vault search must not run for a casual message.")
+
+        monkeypatch.setattr(orchestrator_module, "get_obsidian_provider", _fail_if_called)
+
+        fake = _FakeProvider(chunks=["Hi there!"])
+        _patch_provider(monkeypatch, fake)
+
+        resp = client.post(
+            f"/api/agent/conversations/{conv['id']}/messages",
+            json={"content": "Hi"},
+            headers={"X-CSRF-Token": csrf},
+        )
+        assert resp.status_code == 200
+        events = _parse_sse(resp.text)
+        route_event = next(e for e in events if e["type"] == "route")
+        assert route_event["intent"] == "casual"
+        assert route_event["sources"] == []
+        assert fake.call_count == 2  # classify, then answer
+        assert "grounded knowledge-base answer" not in fake.received_system_prompt
+
+    def test_technical_message_grounds_answer_in_matching_note(self, auth_client, monkeypatch):
+        client, csrf = auth_client
+        client.post(
+            "/api/obsidian/notes",
+            json={
+                "path": "HRMS Payroll Requirements.md",
+                "content": "The HRMS payroll module must support monthly salary runs and statutory deductions.",
+            },
+            headers={"X-CSRF-Token": csrf},
+        )
+        conv = client.post(
+            "/api/agent/conversations", json={"mode": "chat"}, headers={"X-CSRF-Token": csrf}
+        ).json()
+
+        fake = _FakeProvider(
+            chunks=["Based on your notes, payroll needs monthly runs."],
+            classification='{"intent": "technical", "language": "english"}',
+        )
+        _patch_provider(monkeypatch, fake)
+
+        resp = client.post(
+            f"/api/agent/conversations/{conv['id']}/messages",
+            json={"content": "What are the HRMS payroll requirements?"},
+            headers={"X-CSRF-Token": csrf},
+        )
+        assert resp.status_code == 200
+        events = _parse_sse(resp.text)
+        route_event = next(e for e in events if e["type"] == "route")
+        assert route_event["intent"] == "technical"
+        assert route_event["sources"]
+        assert route_event["sources"][0]["title"] == "HRMS Payroll Requirements"
+
+        assert fake.call_count == 2
+        assert "grounded knowledge-base answer" in fake.received_system_prompt
+        assert "ONLY source of truth" in fake.received_system_prompt
+        assert "HRMS Payroll Requirements" in fake.received_system_prompt
+        assert "statutory deductions" in fake.received_system_prompt
+
+    def test_technical_message_with_no_matching_notes_instructs_honest_not_found(self, auth_client, monkeypatch):
+        client, csrf = auth_client
+        conv = client.post(
+            "/api/agent/conversations", json={"mode": "chat"}, headers={"X-CSRF-Token": csrf}
+        ).json()
+
+        fake = _FakeProvider(
+            chunks=["I couldn't find this information in your knowledge base."],
+            classification='{"intent": "technical", "language": "english"}',
+        )
+        _patch_provider(monkeypatch, fake)
+
+        resp = client.post(
+            f"/api/agent/conversations/{conv['id']}/messages",
+            json={"content": "What is RAG?"},
+            headers={"X-CSRF-Token": csrf},
+        )
+        events = _parse_sse(resp.text)
+        route_event = next(e for e in events if e["type"] == "route")
+        assert route_event["sources"] == []
+        assert "no matching notes were found" in fake.received_system_prompt
+        assert "MUST tell the user you couldn't find" in fake.received_system_prompt
+        assert "do not answer from your own general knowledge" in fake.received_system_prompt
+
+    def test_technical_message_when_vault_unavailable(self, auth_client, monkeypatch):
+        import app.agents.orchestrator as orchestrator_module
+
+        client, csrf = auth_client
+        conv = client.post(
+            "/api/agent/conversations", json={"mode": "chat"}, headers={"X-CSRF-Token": csrf}
+        ).json()
+
+        def _broken_provider(user_id):
+            raise RuntimeError("vault is unreachable")
+
+        monkeypatch.setattr(orchestrator_module, "get_obsidian_provider", _broken_provider)
+
+        fake = _FakeProvider(
+            chunks=["I could not search your knowledge base right now."],
+            classification='{"intent": "technical", "language": "english"}',
+        )
+        _patch_provider(monkeypatch, fake)
+
+        resp = client.post(
+            f"/api/agent/conversations/{conv['id']}/messages",
+            json={"content": "Explain MCP"},
+            headers={"X-CSRF-Token": csrf},
+        )
+        assert resp.status_code == 200
+        assert "unavailable right now" in fake.received_system_prompt
+        assert "do not answer from your own general knowledge" in fake.received_system_prompt
+
+    def test_casual_message_in_tamil_gets_language_adaptation_instruction(self, auth_client, monkeypatch):
+        client, csrf = auth_client
+        conv = client.post(
+            "/api/agent/conversations", json={"mode": "chat"}, headers={"X-CSRF-Token": csrf}
+        ).json()
+
+        fake = _FakeProvider(
+            chunks=["வணக்கம்!"],
+            classification='{"intent": "casual", "language": "tamil"}',
+        )
+        _patch_provider(monkeypatch, fake)
+
+        client.post(
+            f"/api/agent/conversations/{conv['id']}/messages",
+            json={"content": "வணக்கம், எப்படி இருக்கீங்க?"},
+            headers={"X-CSRF-Token": csrf},
+        )
+        assert "Tamil" in fake.received_system_prompt
+        assert "grounded knowledge-base answer" not in fake.received_system_prompt
+
+    def test_non_chat_modes_are_not_classified(self, auth_client, monkeypatch):
+        """Knowledge/Research/Project/etc. keep their exact pre-existing
+        behavior — no classification call, no change to their own vault-
+        search/grounding logic."""
+        client, csrf = auth_client
+        conv = client.post(
+            "/api/agent/conversations", json={"mode": "project"}, headers={"X-CSRF-Token": csrf}
+        ).json()
+
+        fake = _FakeProvider(chunks=["OK"])
+        _patch_provider(monkeypatch, fake)
+
+        resp = client.post(
+            f"/api/agent/conversations/{conv['id']}/messages",
+            json={"content": "What is RAG?"},
+            headers={"X-CSRF-Token": csrf},
+        )
+        events = _parse_sse(resp.text)
+        assert not any(e["type"] == "route" for e in events)
+        assert fake.call_count == 1
+
+    def test_second_message_in_same_conversation_still_classifies(self, auth_client, monkeypatch):
+        """Routing runs on every turn, not just the first."""
+        client, csrf = auth_client
+        conv = client.post(
+            "/api/agent/conversations", json={"mode": "chat"}, headers={"X-CSRF-Token": csrf}
+        ).json()
+
+        _patch_provider(monkeypatch, _FakeProvider(chunks=["Hi!"]))
+        client.post(
+            f"/api/agent/conversations/{conv['id']}/messages",
+            json={"content": "Hi"},
+            headers={"X-CSRF-Token": csrf},
+        )
+
+        fake2 = _FakeProvider(
+            chunks=["Grounded answer."],
+            classification='{"intent": "technical", "language": "english"}',
+        )
+        _patch_provider(monkeypatch, fake2)
+        resp = client.post(
+            f"/api/agent/conversations/{conv['id']}/messages",
+            json={"content": "What is MCP?"},
+            headers={"X-CSRF-Token": csrf},
+        )
+        events = _parse_sse(resp.text)
+        route_event = next(e for e in events if e["type"] == "route")
+        assert route_event["intent"] == "technical"

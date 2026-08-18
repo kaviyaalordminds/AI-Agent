@@ -73,8 +73,25 @@
         <div id="thread-active" class="d-none" style="display:flex; flex-direction:column; min-height:0; flex:1;">
           <div class="agent-thread" id="agent-thread"></div>
           <div class="agent-composer">
+            <div class="voice-controls-row">
+              <label class="voice-control-item" title="Speech recognition / response language">
+                <i class="bi bi-translate"></i>
+                <select id="voice-language-select" aria-label="Voice language">
+                  <option value="auto">Auto Detect</option>
+                  <option value="en-US">English</option>
+                  <option value="ta-IN">தமிழ்</option>
+                  <option value="tanglish">Tanglish</option>
+                </select>
+              </label>
+              <div class="form-check form-switch voice-control-item" title="Automatically read assistant replies aloud">
+                <input class="form-check-input" type="checkbox" id="auto-speak-toggle">
+                <label class="form-check-label" for="auto-speak-toggle" style="font-size:0.82rem;">Auto Speak</label>
+              </div>
+              <span id="listening-indicator" class="listening-indicator d-none"><span class="mic-pulse-dot"></span> Listening…</span>
+            </div>
             <div class="surface agent-composer-shell">
               <textarea id="composer-input" rows="1" placeholder="Message Shadow AI…"></textarea>
+              <button type="button" class="mic-btn" id="mic-btn" aria-label="Voice input" title="Speak your message"><i class="bi bi-mic"></i></button>
               <button type="button" class="btn-brand" id="composer-send-btn" aria-label="Send message" title="Send message"><i class="bi bi-arrow-up"></i></button>
             </div>
           </div>

@@ -22,12 +22,13 @@ from collections.abc import AsyncIterator
 
 from sqlalchemy.orm import Session
 
+from app.agents.classifier import classify_message
 from app.agents.prompts import VAULT_SEARCH_MODES, build_system_prompt
 from app.database.base import utcnow
 from app.integrations.claude.base import ClaudeMessage, ClaudeProvider
 from app.integrations.claude.errors import ProviderRequestError
 from app.integrations.obsidian.factory import get_obsidian_provider
-from app.models.conversation import Conversation, Message, MessageRole
+from app.models.conversation import AgentMode, Conversation, Message, MessageRole
 from app.models.history import HistoryEntry, HistoryEntryStatus, HistoryEntryType
 from app.models.project import Project
 
@@ -89,27 +90,62 @@ def record_unavailable_turn(
 
 async def run_chat_turn(
     db: Session, conversation: Conversation, provider: ClaudeProvider, user_content: str
-) -> AsyncIterator[str]:
+) -> AsyncIterator[dict]:
     """Persists the user's message, streams the assistant's reply from the
     given (already-configured) provider, and persists the result. Yields
-    text deltas as they arrive so the API layer can forward them over SSE.
+    small event dicts ({"type": "route", ...} once, then {"type": "delta",
+    "text": ...} repeatedly) so the API layer (app/api/agent/router.py)
+    can forward them over SSE without owning any routing logic itself —
+    this backend module is the single source of truth for provider
+    selection, per the "never let the frontend bypass Obsidian-only
+    technical routing" requirement.
+
+    In AgentMode.chat specifically, every message is first classified as
+    casual or technical (see app/agents/classifier.py): casual messages
+    get Claude's normal free-form Chat persona; technical messages are
+    routed to a strict grounded-RAG persona that may answer ONLY from
+    notes retrieved from the user's Obsidian vault (see
+    _search_vault_context_for_grounding), never from Claude's own
+    general/training knowledge. Every other mode's existing behavior
+    (Knowledge/Research's softer "ground when relevant" vault search,
+    Project/Create/Developer/Automation's own personas) is unchanged.
     """
     _persist_user_message(db, conversation, user_content)
 
     vault_context = None
-    if conversation.mode in VAULT_SEARCH_MODES:
+    sources: list[dict] = []
+    routing_intent: str | None = None
+    routing_language: str | None = None
+
+    if conversation.mode == AgentMode.chat:
+        classification = await classify_message(provider, user_content)
+        routing_intent = classification.intent
+        routing_language = classification.language
+        if classification.intent == "technical":
+            vault_context, sources = _search_vault_context_for_grounding(conversation.user_id, user_content)
+    elif conversation.mode in VAULT_SEARCH_MODES:
         vault_context = _search_vault_context(conversation.user_id, user_content)
 
     project_activity = _build_project_activity_context(db, conversation.project)
 
-    system_prompt = build_system_prompt(conversation.mode, conversation.project, vault_context, project_activity)
+    system_prompt = build_system_prompt(
+        conversation.mode,
+        conversation.project,
+        vault_context,
+        project_activity,
+        grounded=(routing_intent == "technical"),
+        language=routing_language,
+    )
     history = _load_message_history(db, conversation.id)
+
+    if routing_intent is not None:
+        yield {"type": "route", "intent": routing_intent, "language": routing_language, "sources": sources}
 
     full_text = ""
     try:
         async for delta in provider.stream(history, system_prompt):
             full_text += delta
-            yield delta
+            yield {"type": "delta", "text": delta}
     except ProviderRequestError as exc:
         db.add(Message(conversation_id=conversation.id, role=MessageRole.assistant, content=full_text, error=str(exc)))
         _log_history(db, conversation, status=HistoryEntryStatus.failed, user_content=user_content)
@@ -143,6 +179,43 @@ def _search_vault_context(user_id, query: str) -> str:
         excerpt = note.excerpt[:_MAX_NOTE_EXCERPT_CHARS]
         blocks.append(f'- "{note.title}" ({note.path}): {excerpt}')
     return "\n".join(blocks)
+
+
+def _search_vault_context_for_grounding(user_id, query: str) -> tuple[str | None, list[dict]]:
+    """Same underlying vault search as _search_vault_context, but for
+    AgentMode.chat's strict grounded-technical path: also returns
+    structured {"title", "path"} sources for the frontend to show as
+    citations, and distinguishes "the vault itself is unreachable" from
+    "we searched it and found nothing" in the prompt text, since those
+    are different failures Claude should describe differently to the
+    user (see _GROUNDED_TECHNICAL_PROMPT in prompts.py)."""
+    try:
+        provider = get_obsidian_provider(user_id)
+        results = provider.search(query)[:_MAX_VAULT_RESULTS]
+    except Exception:
+        logger.exception("Vault search failed for user %s", user_id)
+        return (
+            "Vault search: unavailable right now (an error occurred reading the vault). "
+            "Tell the user you could not search their knowledge base right now — do not "
+            "answer from your own general knowledge instead.",
+            [],
+        )
+
+    if not results:
+        return (
+            "Vault search: no matching notes were found in the user's Obsidian vault for "
+            "this message. You MUST tell the user you couldn't find this information in "
+            "their knowledge base — do not answer from your own general knowledge instead.",
+            [],
+        )
+
+    blocks = ["Relevant notes retrieved from the user's Obsidian vault (this is your ONLY source of truth for this reply):"]
+    sources: list[dict] = []
+    for note in results:
+        excerpt = note.excerpt[:_MAX_NOTE_EXCERPT_CHARS]
+        blocks.append(f'--- Note: "{note.title}" (path: {note.path}) ---\n{excerpt}')
+        sources.append({"title": note.title, "path": note.path})
+    return "\n".join(blocks), sources
 
 
 def _build_project_activity_context(db: Session, project: Project | None) -> str | None:

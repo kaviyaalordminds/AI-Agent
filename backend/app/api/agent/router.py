@@ -168,8 +168,8 @@ async def send_message(
             conversation = (
                 stream_db.query(Conversation).filter(Conversation.id == conversation_id).first()
             )
-            async for delta in run_chat_turn(stream_db, conversation, provider, payload.content):
-                yield f"data: {json.dumps({'type': 'delta', 'text': delta})}\n\n"
+            async for event in run_chat_turn(stream_db, conversation, provider, payload.content):
+                yield f"data: {json.dumps(event)}\n\n"
             yield f"data: {json.dumps({'type': 'done'})}\n\n"
         except ProviderRequestError as exc:
             logger.warning("Claude request failed for conversation %s: %s", conversation_id, exc)
