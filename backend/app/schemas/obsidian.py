@@ -32,6 +32,9 @@ class VaultStatusOut(BaseModel):
     note_count: int
     detail: str
     folders: list[str]
+    configured_path: str = ""
+    exists: bool = False
+    is_directory: bool = False
     vault_id: str | None = None
     vault_id_check: str | None = None
     vault_id_detail: str | None = None

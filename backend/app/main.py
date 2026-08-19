@@ -224,28 +224,47 @@ def _apply_pending_migrations() -> None:
 
 @app.on_event("startup")
 def _validate_obsidian_vault_path() -> None:
-    """OBSIDIAN_VAULT_PATH (see app/core/config.py, app/integrations/
-    obsidian/factory.py) is optional — most deployments leave it unset
-    and get the default per-user vault layout, which needs no validation
-    here. When it IS set (a single-user deployment pointed at a real
-    existing vault), report clearly at startup whether that directory is
-    actually reachable, without crashing the rest of the app if it
-    isn't: Obsidian being unavailable must never take down chat,
-    documents, or any other unrelated feature."""
-    if not settings.obsidian_vault_path:
-        return
+    """Logs, unconditionally and unambiguously, which Obsidian vault mode
+    is active and exactly what path it resolves to — this is the first
+    thing to check when Obsidian appears to be reading/writing the wrong
+    location, so it must never be silent. Never crashes the rest of the
+    app if the configured directory isn't reachable: Obsidian being
+    unavailable must never take down chat, documents, or any other
+    unrelated feature."""
     from pathlib import Path
 
+    if not settings.obsidian_vault_path:
+        logger.info(
+            "Obsidian vault mode: per-user (OBSIDIAN_VAULT_PATH is not set) — each user's "
+            "vault resolves to OBSIDIAN_VAULT_ROOT/<user_id> (root=%s), NOT a shared real "
+            "vault. Set OBSIDIAN_VAULT_PATH to point every user on this backend at one real, "
+            "existing Obsidian vault instead.",
+            settings.obsidian_vault_root,
+        )
+        return
+
     path = Path(settings.obsidian_vault_path)
-    if path.exists() and path.is_dir():
-        logger.info("OBSIDIAN_VAULT_PATH is configured and reachable: %s", path)
-    elif path.exists():
-        logger.warning("OBSIDIAN_VAULT_PATH exists but is not a directory: %s", path)
+    resolved = path.resolve()
+    exists = path.exists()
+    is_directory = path.is_dir()
+    logger.info(
+        "Obsidian vault mode: single-vault override. provider=%s configured_path=%s "
+        "resolved_path=%s exists=%s is_directory=%s",
+        settings.obsidian_provider,
+        settings.obsidian_vault_path,
+        resolved,
+        exists,
+        is_directory,
+    )
+    if exists and is_directory:
+        pass
+    elif exists:
+        logger.warning("OBSIDIAN_VAULT_PATH exists but is not a directory: %s", resolved)
     else:
         logger.warning(
             "OBSIDIAN_VAULT_PATH is configured but does not exist yet: %s — it will be "
             "auto-provisioned (folder structure + welcome note) on first Obsidian request.",
-            path,
+            resolved,
         )
 
 

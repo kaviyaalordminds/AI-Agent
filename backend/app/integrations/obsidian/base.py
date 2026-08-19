@@ -38,10 +38,22 @@ class VaultStatus:
     configured: bool
     connected: bool
     provider: str
+    # The fully-resolved, absolute path this provider actually reads and
+    # writes — never a raw/unresolved config value. Compare against
+    # configured_path below: they should always be equal in single-vault
+    # (OBSIDIAN_VAULT_PATH) mode, since that mode never appends a user id
+    # or otherwise transforms the configured value.
     vault_path: str
     note_count: int
     detail: str
     folders: list[str] = field(default_factory=list)
+    # The raw path this provider was constructed from, before resolution —
+    # exactly what OBSIDIAN_VAULT_PATH (or the per-user default) said, so a
+    # mismatch between this and vault_path above is immediately visible
+    # rather than hidden inside a resolved-only value.
+    configured_path: str = ""
+    exists: bool = False
+    is_directory: bool = False
     # Optional OBSIDIAN_VAULT_ID cross-check (see
     # app/integrations/obsidian/vault_identity.py) — vault_id is only
     # populated when OBSIDIAN_VAULT_ID is configured; vault_id_check is

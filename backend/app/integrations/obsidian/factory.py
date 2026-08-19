@@ -37,7 +37,9 @@ def get_obsidian_provider(user_id: uuid.UUID) -> ObsidianProvider:
                 root,
             )
             provision_vault(root)
-        return LocalVaultProvider(root, vault_id=settings.obsidian_vault_id)
+        return LocalVaultProvider(
+            root, vault_id=settings.obsidian_vault_id, configured_path=settings.obsidian_vault_path
+        )
 
     root = Path(settings.obsidian_vault_root) / str(user_id)
     if not root.exists():

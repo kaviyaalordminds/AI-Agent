@@ -107,9 +107,16 @@ class LocalVaultProvider(ObsidianProvider):
     files, and this is a genuine implementation of vault operations, not a
     mock standing in for one."""
 
-    def __init__(self, root: Path, vault_id: str | None = None) -> None:
+    def __init__(self, root: Path, vault_id: str | None = None, configured_path: str | None = None) -> None:
         self.root = root.resolve()
         self.vault_id = vault_id
+        # Preserves the raw, pre-resolution value the caller was
+        # constructed from (e.g. exactly what OBSIDIAN_VAULT_PATH said),
+        # purely for status/diagnostics — defaults to the resolved root
+        # itself when the caller doesn't distinguish the two (the per-user
+        # default layout, where "configured" and "resolved" are the same
+        # thing by construction: obsidian_vault_root + user_id).
+        self.configured_path = configured_path if configured_path is not None else str(self.root)
 
     def _resolve(self, path: str, must_exist: bool | None = None) -> Path:
         return validate_obsidian_path(self.root, path, must_exist=must_exist)
@@ -154,6 +161,13 @@ class LocalVaultProvider(ObsidianProvider):
         return [p for p in self._all_note_files() if p.relative_to(self.root).parts[0] != "00-System"]
 
     def status(self) -> VaultStatus:
+        # Explicit, unconditional existence/type checks (never inferred
+        # from whether an rglob happened to succeed) so the status
+        # response makes a wrong path immediately obvious rather than
+        # burying it in a try/except detail string.
+        path_exists = self.root.exists()
+        path_is_dir = self.root.is_dir()
+
         try:
             note_count = len(self._all_note_files())
             connected = True
@@ -162,6 +176,13 @@ class LocalVaultProvider(ObsidianProvider):
             note_count = 0
             connected = False
             detail = f"Vault path is not accessible: {exc}"
+
+        if not path_exists:
+            connected = False
+            detail = f"Configured vault path does not exist: {self.root}"
+        elif not path_is_dir:
+            connected = False
+            detail = f"Configured vault path exists but is not a directory: {self.root}"
 
         vault_id_check = None
         vault_id_detail = None
@@ -178,6 +199,9 @@ class LocalVaultProvider(ObsidianProvider):
             note_count=note_count,
             detail=detail,
             folders=DEFAULT_FOLDERS,
+            configured_path=self.configured_path,
+            exists=path_exists,
+            is_directory=path_is_dir,
             vault_id=self.vault_id,
             vault_id_check=vault_id_check,
             vault_id_detail=vault_id_detail,

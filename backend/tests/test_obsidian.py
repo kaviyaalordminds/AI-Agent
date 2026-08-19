@@ -81,6 +81,80 @@ class TestObsidianVaultPathOverride:
         assert (target / "00-System").exists()
         assert provider.root == target.resolve()
 
+    def test_override_never_appends_user_id_for_two_different_users(self, tmp_path, monkeypatch):
+        """The exact regression this override exists to prevent: a
+        directly-configured OBSIDIAN_VAULT_PATH must resolve to itself,
+        never OBSIDIAN_VAULT_PATH/<user_id> — checked here against two
+        different real user ids to make the point unambiguous."""
+        from app.core.config import get_settings
+
+        real_vault = tmp_path / "My Real Obsidian Vault"
+        settings = get_settings()
+        monkeypatch.setattr(settings, "obsidian_vault_path", str(real_vault))
+
+        for _ in range(2):
+            provider = get_obsidian_provider(uuid.uuid4())
+            assert provider.root == real_vault.resolve()
+            assert str(provider.root).endswith("My Real Obsidian Vault")
+            # Never a per-user subfolder appended underneath it.
+            assert not any(p.is_dir() and len(p.name) == 36 for p in real_vault.iterdir() if p.is_dir())
+
+    def test_status_reports_configured_path_matching_resolved_path(self, tmp_path, monkeypatch):
+        """The diagnostics an operator needs to catch a misconfigured
+        vault: configured_path (the raw OBSIDIAN_VAULT_PATH value) must
+        equal vault_path (the resolved path actually used) in override
+        mode, and exists/is_directory must be true once provisioned."""
+        from app.core.config import get_settings
+
+        real_vault = tmp_path / "My Real Obsidian Vault"
+        settings = get_settings()
+        monkeypatch.setattr(settings, "obsidian_vault_path", str(real_vault))
+
+        provider = get_obsidian_provider(uuid.uuid4())
+        status = provider.status()
+        assert status.configured_path == str(real_vault)
+        assert status.vault_path == str(real_vault.resolve())
+        assert status.exists is True
+        assert status.is_directory is True
+
+    def test_status_never_reports_ai_agent_storage_as_the_vault(self, tmp_path, monkeypatch):
+        """The exact bug this fix targets: pointing OBSIDIAN_VAULT_PATH at
+        a real vault must never resolve to anything under
+        obsidian_vault_root (the AI-Agent storage-backed per-user
+        layout)."""
+        from app.core.config import get_settings
+
+        storage_backed_root = tmp_path / "storage" / "obsidian_vaults"
+        real_vault = tmp_path / "My Real Obsidian Vault"
+        settings = get_settings()
+        monkeypatch.setattr(settings, "obsidian_vault_root", str(storage_backed_root))
+        monkeypatch.setattr(settings, "obsidian_vault_path", str(real_vault))
+
+        provider = get_obsidian_provider(uuid.uuid4())
+        status = provider.status()
+        assert str(storage_backed_root) not in status.vault_path
+        assert status.vault_path == str(real_vault.resolve())
+        assert not storage_backed_root.exists()
+
+    def test_status_reports_missing_directory_honestly(self, tmp_path, monkeypatch):
+        """If the configured path somehow isn't a real directory after
+        resolution (e.g. deleted after provisioning), status() must say
+        so plainly rather than silently reporting connected=True."""
+        from app.core.config import get_settings
+        from app.integrations.obsidian.local_vault_provider import LocalVaultProvider
+
+        real_vault = tmp_path / "Was Here"
+        real_vault.mkdir()
+        provider = LocalVaultProvider(real_vault, configured_path=str(real_vault))
+        import shutil
+
+        shutil.rmtree(real_vault)
+
+        status = provider.status()
+        assert status.exists is False
+        assert status.connected is False
+        assert "does not exist" in status.detail
+
 
 def test_status_auto_provisions_vault(auth_client):
     client, _csrf = auth_client
